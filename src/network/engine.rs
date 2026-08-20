@@ -445,7 +445,7 @@ async fn create_pc_with_ice_hook(
                 webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState::Failed => PeerStatus::Failed,
                 webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState::Closed => PeerStatus::Closed,
                 webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState::Disconnected => PeerStatus::Connecting,
-                _ => PeerStatus::Connecting,
+                _ => return, // Don't downgrade from Connected/Connecting for transient states.
             };
             update_peer_state(&mesh_pc, peer_id, |p| p.status = s).await;
             if s == PeerStatus::Failed {
