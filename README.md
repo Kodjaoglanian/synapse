@@ -24,20 +24,21 @@ mesh network in real time: animated topology graph, throughput sparklines,
 stream inspector, and a color-coded event log.
 
 ```
-╭◆ synapse──────────────────────────────────────────────────────────────────────
-│  ___ _   _ ___ _   _ ___ ___  ___ ___ ___    PUBLIC IP 203.0.113.42  NAT cone  MODE P2P
-│ / __| | | / __| | | | __/ _ \| _ \ __| _ \   ↑ 1.2 MB/s  ↓ 3.4 MB/s  RTT 42ms
-│ \__ \ |_| \__ \ |_| | _| (_) |   / _||   /   PEERS 3  PKTS 12.4k  LOST 0.1%  TOTAL ↑42MB ↓118MB
-│ |___/\__,_|___/\__,_|___\___/|_|_\___|_|_\
-╭⬡ Mesh Graph────────────────────────────╮╭⇄ Tunnels & Streams─────────────────
-│         ⬡                              ││ LABEL        LOCAL          PEER  STATUS
-│        / \                             ││ web          127.0.0.1:3000  alice ESTABLISHED
-│   ⬡───●   ●───⬡                        ││ ssh          127.0.0.1:2222  bob   TRANSFERRING
-│        \ /                             ││
-│         ⬡                              ││
-╭≋ Throughput & Events───────────────────╮╭≡ Event Stream──────────────────────
-│ ↑ ▁▂▃▅▆▇█▇▆▅▃▂▁▁▂▃▅▆▇█▇▆▅▃▂▁          ││ [HS] room 'web': offer posted
-│ ↓ ▁▂▃▄▅▆▇█▇▆▅▄▃▂▁▁▂▃▄▅▆▇█▇▆▅▄▃          ││ [HS] peer 1: ICE connected (direct)
+╭◆ synapse──────────────────────────────────────────────────────────────────────────────────────
+│ //   ) ) \\    / / /|    / / // | |     //   ) ) //   ) )  //   / /    PUBLIC IP 203.0.113.42  NAT cone  MODE P2P
+│ ((         \\  / / //|   / / //__| |    //___/ / ((        //____      ↑ 1.2 MB/s  ↓ 3.4 MB/s  RTT 42ms
+│   \\        \\/ / // |  / / / ___  |   / ____ /    \\     / ____       PEERS 3  PKTS 12.4k  LOST 0.1%  TOTAL ↑42MB ↓118MB
+│     ) )      / / //  | / / //    | |  //             ) ) //
+│ ((___ / /      / / //   |/ / //     | | //       ((___ / / //____/ /
+╭⬡ Mesh Graph────────────────────────────────────────────╮╭⇄ Tunnels & Streams─────────────────
+│         ⬡                                              ││ LABEL        LOCAL          PEER  STATUS
+│        / \                                             ││ web          127.0.0.1:3000  alice ESTABLISHED
+│   ⬡───●   ●───⬡                                        ││ ssh          127.0.0.1:2222  bob   TRANSFERRING
+│        \ /                                             ││
+│         ⬡                                              ││
+╭≋ Throughput & Events───────────────────────────────────╮╭≡ Event Stream──────────────────────
+│ ↑ ▁▂▃▅▆▇█▇▆▅▃▂▁▁▂▃▅▆▇█▇▆▅▃▂▁                          ││ [HS] room 'web': offer posted
+│ ↓ ▁▂▃▄▅▆▇█▇▆▅▄▃▂▁▁▂▃▄▅▆▇█▇▆▅▄▃                          ││ [HS] peer 1: ICE connected (direct)
 ```
 
 ## Quick install
@@ -54,6 +55,36 @@ Or pin a specific version:
 curl -fsSL https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.sh | sh -s -- --version v0.1.0
 ```
 
+### One-line install (Windows — PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.ps1 | iex
+```
+
+Or pin a specific version:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.ps1))) -Version "v0.1.0"
+```
+
+The script downloads the correct binary, installs it to `%LOCALAPPDATA%\Programs\synapse`,
+and adds it to your user PATH automatically.
+
+### Manual download
+
+Prebuilt binaries for all platforms are available on the
+[releases page](https://github.com/Kodjaoglanian/synapse/releases):
+
+| Platform | Asset |
+|----------|-------|
+| Linux x86_64 | `synapse-v0.1.0-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux ARM64 | `synapse-v0.1.0-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS x86_64 (Intel) | `synapse-v0.1.0-x86_64-apple-darwin.tar.gz` |
+| macOS ARM64 (Apple Silicon) | `synapse-v0.1.0-aarch64-apple-darwin.tar.gz` |
+| Windows x86_64 | `synapse-v0.1.0-x86_64-pc-windows-msvc.zip` |
+
+Extract the archive and add the `synapse` (or `synapse.exe`) binary to your PATH.
+
 ### Build from source
 
 ```bash
@@ -62,11 +93,6 @@ cd synapse
 cargo build --release
 # Binary: ./target/release/synapse
 ```
-
-### Windows
-
-Download the `.zip` from the [releases page](https://github.com/Kodjaoglanian/synapse/releases),
-extract, and add `synapse.exe` to your PATH.
 
 ## Usage
 
