@@ -10,10 +10,11 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::{mpsc, watch};
 
-use super::{LinkKind, PeerId, PeerState, SharedMesh};
+use super::{LinkKind, PeerId, PeerState, SharedMesh, StreamInfo, Tunnel};
 
 /// How often a fresh snapshot is published to the UI.
 pub const SNAPSHOT_INTERVAL: Duration = Duration::from_millis(100);
+const RATE_INTERVAL: Duration = Duration::from_secs(2);
 /// Window used for the throughput sparkline (seconds).
 pub const SPARK_WINDOW_SECS: usize = 60;
 
@@ -34,6 +35,8 @@ pub struct PeerStats {
 pub struct MetricsSnapshot {
     pub timestamp: Instant,
     pub peers: HashMap<PeerId, PeerState>,
+    pub tunnels: HashMap<u32, Tunnel>,
+    pub streams: HashMap<u64, StreamInfo>,
     pub total_up: u64,
     pub total_down: u64,
     pub up_rate_bps: u64,
@@ -51,6 +54,8 @@ impl Default for MetricsSnapshot {
         Self {
             timestamp: Instant::now(),
             peers: HashMap::new(),
+            tunnels: HashMap::new(),
+            streams: HashMap::new(),
             total_up: 0,
             total_down: 0,
             up_rate_bps: 0,
@@ -111,9 +116,11 @@ pub fn spawn_collector(mesh: SharedMesh) -> MetricsHandle {
 
     tokio::spawn(async move {
         let mut acc: HashMap<PeerId, Acc> = HashMap::new();
-        let mut last_snapshot = Instant::now();
-        let mut last_bytes_sent: u64 = 0;
-        let mut last_bytes_recv: u64 = 0;
+        let mut last_rate_tick = Instant::now();
+        let mut rate_base_sent: u64 = 0;
+        let mut rate_base_recv: u64 = 0;
+        let mut up_rate: u64 = 0;
+        let mut down_rate: u64 = 0;
         let mut up_hist: Vec<u64> = Vec::with_capacity(SPARK_WINDOW_SECS);
         let mut down_hist: Vec<u64> = Vec::with_capacity(SPARK_WINDOW_SECS);
         let mut last_hist_tick = Instant::now();
@@ -127,8 +134,6 @@ pub fn spawn_collector(mesh: SharedMesh) -> MetricsHandle {
                 Some(cmd) = cmd_rx.recv() => { handle_cmd(cmd, &mut acc); }
                 _ = ticker.tick() => {
                     let now = Instant::now();
-                    let elapsed = now.duration_since(last_snapshot).as_secs_f64().max(0.001);
-                    last_snapshot = now;
 
                     // Aggregate totals from accumulators.
                     let mut total_sent = 0u64;
@@ -138,26 +143,43 @@ pub fn spawn_collector(mesh: SharedMesh) -> MetricsHandle {
                     let mut pkts = 0u64;
                     let mut lost = 0u64;
 
-                    let peers_snapshot = {
+                    let (mut peers_snapshot, tunnels_snapshot, streams_snapshot) = {
                         let guard = mesh.lock().await;
-                        guard.peers.clone()
+                        (
+                            guard.peers.clone(),
+                            guard.tunnels.clone(),
+                            guard.streams.clone(),
+                        )
                     };
 
-                    for (pid, peer) in &peers_snapshot {
+                    for (pid, peer) in &mut peers_snapshot {
                         let a = acc.entry(*pid).or_default();
                         // Reflect accumulated link classification.
                         a.relayed = a.relayed || peer.relayed;
+                        peer.bytes_sent = a.sent;
+                        peer.bytes_recv = a.recv;
+                        if a.rtt_ms > 0 {
+                            peer.rtt_ms = a.rtt_ms;
+                        }
+                        peer.relayed = a.relayed;
+                        peer.link = LinkKind::classify(peer.rtt_ms, peer.relayed);
                         total_sent += a.sent;
                         total_recv += a.recv;
-                        if a.rtt_ms > 0 { rtt_sum += a.rtt_ms as u64; rtt_n += 1; }
+                        if peer.rtt_ms > 0 { rtt_sum += peer.rtt_ms as u64; rtt_n += 1; }
                         pkts += a.packets_sent + a.packets_recv;
                         lost += a.packets_lost;
                     }
 
-                    let up_rate = ((total_sent.saturating_sub(last_bytes_sent) as f64) / elapsed) as u64;
-                    let down_rate = ((total_recv.saturating_sub(last_bytes_recv) as f64) / elapsed) as u64;
-                    last_bytes_sent = total_sent;
-                    last_bytes_recv = total_recv;
+                    if now.duration_since(last_rate_tick) >= RATE_INTERVAL {
+                        let elapsed = now.duration_since(last_rate_tick).as_secs_f64().max(0.001);
+                        up_rate =
+                            ((total_sent.saturating_sub(rate_base_sent) as f64) / elapsed) as u64;
+                        down_rate =
+                            ((total_recv.saturating_sub(rate_base_recv) as f64) / elapsed) as u64;
+                        rate_base_sent = total_sent;
+                        rate_base_recv = total_recv;
+                        last_rate_tick = now;
+                    }
 
                     // Push per-second samples into the sparkline history.
                     if now.duration_since(last_hist_tick) >= Duration::from_secs(1) {
@@ -171,6 +193,8 @@ pub fn spawn_collector(mesh: SharedMesh) -> MetricsHandle {
                     let snap = MetricsSnapshot {
                         timestamp: now,
                         peers: peers_snapshot,
+                        tunnels: tunnels_snapshot,
+                        streams: streams_snapshot,
                         total_up: total_sent,
                         total_down: total_recv,
                         up_rate_bps: up_rate,
@@ -262,5 +286,106 @@ pub fn fmt_bytes(b: u64) -> String {
         format!("{:.2} KB", v / KB)
     } else {
         format!("{} B", b)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use tokio::sync::Mutex;
+
+    use super::{spawn_collector, MetricsCmd};
+    use crate::network::{
+        LinkKind, MeshState, PeerState, PeerStatus, StreamInfo, StreamStatus, Tunnel,
+    };
+
+    #[tokio::test]
+    async fn publishes_per_peer_traffic_and_rtt() {
+        let mesh = Arc::new(Mutex::new(MeshState::default()));
+        {
+            let mut guard = mesh.lock().await;
+            guard.peers.insert(
+                1,
+                PeerState {
+                    id: 1,
+                    label: "bob".to_string(),
+                    status: PeerStatus::Connected,
+                    ..Default::default()
+                },
+            );
+            guard.tunnels.insert(
+                7,
+                Tunnel {
+                    id: 7,
+                    local_addr: "127.0.0.1:9000".parse().unwrap(),
+                    peer: 1,
+                    remote_host: "127.0.0.1".to_string(),
+                    remote_port: 80,
+                    label: "web".to_string(),
+                },
+            );
+            guard.streams.insert(
+                9,
+                StreamInfo {
+                    id: 9,
+                    tunnel_id: 7,
+                    peer: 1,
+                    status: StreamStatus::Transferring,
+                    opened_at: std::time::Instant::now(),
+                    bytes_sent: 10,
+                    bytes_recv: 20,
+                },
+            );
+        }
+        let mut metrics = spawn_collector(mesh);
+
+        metrics
+            .cmd_tx
+            .send(MetricsCmd::Bytes {
+                peer: 1,
+                sent: 128,
+                recv: 64,
+            })
+            .unwrap();
+        metrics
+            .cmd_tx
+            .send(MetricsCmd::Packets {
+                peer: 1,
+                sent: 2,
+                recv: 1,
+                lost: 0,
+            })
+            .unwrap();
+        metrics
+            .cmd_tx
+            .send(MetricsCmd::Rtt {
+                peer: 1,
+                rtt_ms: 12,
+            })
+            .unwrap();
+
+        let snapshot = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                metrics.snapshot_rx.changed().await.unwrap();
+                let snapshot = metrics.snapshot_rx.borrow().clone();
+                if snapshot.total_up == 128 && snapshot.avg_rtt_ms == 12 {
+                    break snapshot;
+                }
+            }
+        })
+        .await
+        .unwrap();
+
+        let peer = snapshot.peers.get(&1).unwrap();
+        assert_eq!(peer.bytes_sent, 128);
+        assert_eq!(peer.bytes_recv, 64);
+        assert_eq!(peer.rtt_ms, 12);
+        assert_eq!(peer.link, LinkKind::DirectFast);
+        assert_eq!(snapshot.total_down, 64);
+        assert_eq!(snapshot.total_packets, 3);
+        assert_eq!(snapshot.tunnels.get(&7).unwrap().label, "web");
+        assert_eq!(snapshot.streams.get(&9).unwrap().bytes_recv, 20);
     }
 }

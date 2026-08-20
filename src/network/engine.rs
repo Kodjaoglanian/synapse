@@ -500,14 +500,32 @@ async fn create_pc_with_ice_hook(
         let metrics_dc = metrics_dc.clone();
         let peers_dc = peers_dc.clone();
         Box::pin(async move {
-            // Store control channel in PeerCtx so ping loop can use it.
-            if label == "synapse-ctrl" {
-                let mut g = peers_dc.lock().await;
-                if let Some(ctx) = g.get_mut(&peer_id) {
-                    ctx.ctrl = Some(Arc::clone(&dc));
-                }
-            }
+            let is_ctrl = label == "synapse-ctrl";
+            let ctrl = Arc::clone(&dc);
+            let events_store = events_dc.clone();
             wire_data_channel(&dc, &label, peer_id, mesh_dc, events_dc, metrics_dc).await;
+            if is_ctrl {
+                for _ in 0..100 {
+                    let stored = {
+                        let mut g = peers_dc.lock().await;
+                        if let Some(ctx) = g.get_mut(&peer_id) {
+                            ctx.ctrl = Some(Arc::clone(&ctrl));
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if stored {
+                        return;
+                    }
+                    time::sleep(Duration::from_millis(50)).await;
+                }
+                emit_log(
+                    &events_store,
+                    LogLevel::Error,
+                    format!("peer {peer_id}: failed to store control channel"),
+                );
+            }
         })
     }));
 
@@ -533,6 +551,20 @@ async fn stats_relayed(pc: &RTCPeerConnection) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+fn record_traffic(metrics: &MetricsHandle, peer: PeerId, sent: u64, recv: u64) {
+    let _ = metrics
+        .cmd_tx
+        .send(crate::network::metrics::MetricsCmd::Bytes { peer, sent, recv });
+    let _ = metrics
+        .cmd_tx
+        .send(crate::network::metrics::MetricsCmd::Packets {
+            peer,
+            sent: if sent > 0 { 1 } else { 0 },
+            recv: if recv > 0 { 1 } else { 0 },
+            lost: 0,
+        });
 }
 
 /// Wire a data channel's open/message/close handlers for control & tunnels.
@@ -561,6 +593,7 @@ async fn wire_data_channel(
             let mesh_hello = mesh_hello.clone();
             let events_hello = events_hello.clone();
             Box::pin(async move {
+                record_traffic(&metrics_ping, peer_id, 0, msg.data.len() as u64);
                 let data = String::from_utf8_lossy(&msg.data);
                 if let Some(rest) = data.strip_prefix("hello:") {
                     // Remote peer announced their label — update our peer state.
@@ -576,7 +609,11 @@ async fn wire_data_channel(
                     .await;
                 } else if let Some(rest) = data.strip_prefix("ping:") {
                     // Reply with pong:<ts>.
-                    let _ = dc_ping.send(&Bytes::from(format!("pong:{rest}"))).await;
+                    let pong = Bytes::from(format!("pong:{rest}"));
+                    let len = pong.len() as u64;
+                    if dc_ping.send(&pong).await.is_ok() {
+                        record_traffic(&metrics_ping, peer_id, len, 0);
+                    }
                 } else if let Some(rest) = data.strip_prefix("pong:") {
                     if let Ok(ts) = rest.parse::<u128>() {
                         // Compute RTT against the original send time encoded in ts.
@@ -585,7 +622,7 @@ async fn wire_data_channel(
                             .unwrap_or_default()
                             .as_nanos();
                         let rtt_ms = now_ns.saturating_sub(ts) / 1_000_000;
-                        let rtt_ms = rtt_ms.min(u32::MAX as u128) as u32;
+                        let rtt_ms = (rtt_ms.min(u32::MAX as u128) as u32).max(1);
                         update_peer_state(&mesh_ping, peer_id, |p| {
                             p.rtt_ms = rtt_ms;
                             p.link = LinkKind::classify(rtt_ms, p.relayed);
@@ -644,18 +681,21 @@ async fn wire_data_channel(
 
             let events_msg = events_t.clone();
             let metrics_msg = metrics_t.clone();
+            let mesh_msg = mesh.clone();
             dc.on_message(Box::new(move |msg| {
                 let metrics_t = metrics_msg.clone();
                 let events_t = events_msg.clone();
+                let mesh_t = mesh_msg.clone();
                 let n = msg.data.len() as u64;
                 Box::pin(async move {
-                    let _ = metrics_t
-                        .cmd_tx
-                        .send(crate::network::metrics::MetricsCmd::Bytes {
-                            peer: peer_id,
-                            sent: 0,
-                            recv: n,
-                        });
+                    {
+                        let mut g = mesh_t.lock().await;
+                        if let Some(stream) = g.streams.get_mut(&sid) {
+                            stream.status = StreamStatus::Transferring;
+                            stream.bytes_recv += n;
+                        }
+                    }
+                    record_traffic(&metrics_t, peer_id, 0, n);
                     let _ = events_t.send(NetEvent::StreamUpdated(StreamInfo {
                         id: sid,
                         tunnel_id: tid,
@@ -670,9 +710,12 @@ async fn wire_data_channel(
 
             dc.on_close(Box::new({
                 let events_t = events_t.clone();
+                let mesh_t = mesh.clone();
                 move || {
                     let events_t = events_t.clone();
+                    let mesh_t = mesh_t.clone();
                     Box::pin(async move {
+                        mesh_t.lock().await.streams.remove(&sid);
                         let _ = events_t.send(NetEvent::StreamClosed(sid));
                     })
                 }
@@ -981,6 +1024,20 @@ async fn handle_quick_connect(
         g.peers.insert(peer_id, state.clone());
     }
     let _ = events.send(NetEvent::PeerAdded(state));
+    {
+        let mut g = peers.lock().await;
+        g.insert(
+            peer_id,
+            PeerCtx {
+                id: peer_id,
+                label: label.clone(),
+                pc: Arc::clone(&pc),
+                ctrl: None,
+                tunnels: HashMap::new(),
+                last_ping: None,
+            },
+        );
+    }
 
     if is_offer {
         let desc: RTCSessionDescription =
@@ -1009,20 +1066,6 @@ async fn handle_quick_connect(
         );
     }
 
-    {
-        let mut g = peers.lock().await;
-        g.insert(
-            peer_id,
-            PeerCtx {
-                id: peer_id,
-                label: label.clone(),
-                pc,
-                ctrl: None,
-                tunnels: HashMap::new(),
-                last_ping: None,
-            },
-        );
-    }
     spawn_ping_loop(
         peer_id,
         label,
@@ -1287,6 +1330,20 @@ async fn signaling_answer(
     let offer_json =
         offer_json.ok_or_else(|| anyhow!("timed out waiting for offer in room '{room}'"))?;
     let offer: RTCSessionDescription = serde_json::from_str(&offer_json).context("parse offer")?;
+    {
+        let mut g = peers.lock().await;
+        g.insert(
+            peer_id,
+            PeerCtx {
+                id: peer_id,
+                label: label.clone(),
+                pc: Arc::clone(&pc),
+                ctrl: None,
+                tunnels: HashMap::new(),
+                last_ping: None,
+            },
+        );
+    }
     pc.set_remote_description(offer).await?;
     emit_log(
         events,
@@ -1307,20 +1364,6 @@ async fn signaling_answer(
         format!("room '{room}': answer posted"),
     );
 
-    {
-        let mut g = peers.lock().await;
-        g.insert(
-            peer_id,
-            PeerCtx {
-                id: peer_id,
-                label: label.clone(),
-                pc: Arc::clone(&pc),
-                ctrl: None, // control channel arrives via on_data_channel
-                tunnels: HashMap::new(),
-                last_ping: None,
-            },
-        );
-    }
     spawn_ping_loop(
         peer_id,
         label.clone(),
@@ -1449,15 +1492,22 @@ fn spawn_ping_loop(
             // peer learns/updates our name. Repeated because on_message may
             // not be registered yet on the first send.
             if tick_count % 5 == 1 {
-                let hello = format!("hello:{local_label}");
-                let _ = ctrl.send(&Bytes::from(hello)).await;
+                let hello = Bytes::from(format!("hello:{local_label}"));
+                let len = hello.len() as u64;
+                if ctrl.send(&hello).await.is_ok() {
+                    record_traffic(&metrics, peer_id, len, 0);
+                }
             }
 
             let ts = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_nanos();
-            if ctrl.send(&Bytes::from(format!("ping:{ts}"))).await.is_err() {
+            let ping = Bytes::from(format!("ping:{ts}"));
+            let len = ping.len() as u64;
+            if ctrl.send(&ping).await.is_ok() {
+                record_traffic(&metrics, peer_id, len, 0);
+            } else {
                 emit_log(
                     &events,
                     LogLevel::Warn,

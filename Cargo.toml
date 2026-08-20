@@ -1,6 +1,6 @@
 [package]
 name = "synapse"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 authors = ["Kodjaoglanian"]
 description = "Decentralized P2P tunneling platform with a high-end terminal UI"
@@ -27,6 +27,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 futures = "0.3"
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+sha2 = "0.10.9"
 
 [profile.release]
 opt-level = 3

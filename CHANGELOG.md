@@ -15,6 +15,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.2.3] - 2026-08-20
+
+### Fixed
+
+- TUI now consumes network events through the persistent broadcast receiver, so
+  ICE, connection, label, stream, and error events remain visible.
+- Control-channel registration no longer loses the responder channel when it
+  arrives before peer setup completes.
+- Ping, pong, and label messages now contribute to byte and packet metrics;
+  RTT is always visible after the first successful pong.
+- Per-peer byte counts, RTT, link quality, tunnels, and real streams are merged
+  into each published snapshot, allowing graph activity and tables to update.
+- Throughput uses a stable two-second rate window instead of disappearing
+  between control pings.
+- Tunnel and stream tables now show real mesh state instead of synthesizing
+  streams from peer control traffic.
+- Self-update uses a unique extraction directory, verifies the downloaded
+  SHA-256 checksum and installed version, and reports how to update a
+  system-owned binary.
+
+### Tests
+
+- Added regressions for early network events, per-peer metrics/snapshot state,
+  checksum selection, and connected-peer rendering at 80x24.
+
 ## [0.2.2] - 2025-01-20
 
 ### Fixed

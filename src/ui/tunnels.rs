@@ -40,31 +40,31 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_tunnels(f: &mut Frame, app: &App, area: Rect) {
     let snap = &app.snapshot;
-    // We don't carry tunnels in the snapshot; reconstruct a pseudo-list from
-    // peers so the panel is never empty in the demo. Each connected peer with
-    // traffic is shown as a tunnel row.
     let rows: Vec<Row> = snap
-        .peers
+        .tunnels
         .values()
-        .map(|p| {
+        .map(|tunnel| {
+            let peer = snap.peers.get(&tunnel.peer);
+            let status = peer.map(|p| p.status).unwrap_or(PeerStatus::Idle);
+            let link = peer.map(|p| p.link).unwrap_or_default();
             Row::new(vec![
-                Line::from(Span::styled(format!("{}", p.id), t::header_value_style())),
-                Line::from(Span::styled(p.label.clone(), t::header_value_style())),
                 Line::from(Span::styled(
-                    format!("{:?}", p.status),
-                    super::status_style(p.status),
+                    format!("{}", tunnel.id),
+                    t::header_value_style(),
                 )),
+                Line::from(Span::styled(tunnel.label.clone(), t::header_value_style())),
                 Line::from(Span::styled(
-                    format!("{:?}", p.link),
-                    super::link_style(p.link),
+                    format!("{status:?}"),
+                    super::status_style(status),
                 )),
+                Line::from(Span::styled(format!("{link:?}"), super::link_style(link))),
             ])
         })
         .collect();
 
     let header = Row::new(vec![
         Line::from(Span::styled("ID", t::header_label_style())),
-        Line::from(Span::styled("PEER", t::header_label_style())),
+        Line::from(Span::styled("TUNNEL", t::header_label_style())),
         Line::from(Span::styled("STATUS", t::header_label_style())),
         Line::from(Span::styled("LINK", t::header_label_style())),
     ])
@@ -92,37 +92,39 @@ fn draw_tunnels(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_streams(f: &mut Frame, app: &App, area: Rect) {
     let snap = &app.snapshot;
-    // Streams live in the mesh, not the snapshot. We approximate from per-peer
-    // byte counters so the inspector reflects live activity.
     let now = Instant::now();
-    let mut rows: Vec<Row> = Vec::new();
-    for p in snap.peers.values() {
-        if p.bytes_sent + p.bytes_recv == 0 {
-            continue;
-        }
-        let status = if p.status == PeerStatus::Connected {
-            StreamStatus::Transferring
-        } else {
-            StreamStatus::Closed
-        };
-        let dur = p
-            .connected_at
-            .map(|c| now.duration_since(c))
-            .unwrap_or_else(|| Duration::ZERO);
-        rows.push(Row::new(vec![
-            Line::from(Span::styled(
-                format!("{:#x}", p.id),
-                t::header_value_style(),
-            )),
-            Line::from(Span::styled(p.label.clone(), t::header_value_style())),
-            Line::from(Span::styled(format!("{:?}", status), stream_style(status))),
-            Line::from(Span::styled(fmt_dur(dur), t::dim_style())),
-            Line::from(Span::styled(
-                format!("↑{} ↓{}", fmt_bytes(p.bytes_sent), fmt_bytes(p.bytes_recv)),
-                t::header_value_style(),
-            )),
-        ]));
-    }
+    let rows: Vec<Row> = snap
+        .streams
+        .values()
+        .map(|stream| {
+            let peer = snap
+                .peers
+                .get(&stream.peer)
+                .map(|p| p.label.clone())
+                .unwrap_or_else(|| format!("peer {}", stream.peer));
+            let dur = now.duration_since(stream.opened_at);
+            Row::new(vec![
+                Line::from(Span::styled(
+                    format!("{:#x}", stream.id),
+                    t::header_value_style(),
+                )),
+                Line::from(Span::styled(peer, t::header_value_style())),
+                Line::from(Span::styled(
+                    format!("{:?}", stream.status),
+                    stream_style(stream.status),
+                )),
+                Line::from(Span::styled(fmt_dur(dur), t::dim_style())),
+                Line::from(Span::styled(
+                    format!(
+                        "↑{} ↓{}",
+                        fmt_bytes(stream.bytes_sent),
+                        fmt_bytes(stream.bytes_recv)
+                    ),
+                    t::header_value_style(),
+                )),
+            ])
+        })
+        .collect();
     if rows.is_empty() {
         let placeholder = Paragraph::new(Line::from(Span::styled(
             "no active streams — press n to connect a peer",

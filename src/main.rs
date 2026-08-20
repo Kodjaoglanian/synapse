@@ -200,12 +200,11 @@ async fn run_tui(net: network::Network) -> Result<()> {
     res
 }
 
-async fn run_headless(net: network::Network) -> Result<()> {
-    let mut rx = net.events_tx.subscribe();
+async fn run_headless(mut net: network::Network) -> Result<()> {
     // Print a startup banner.
     println!("{}", i18n::t().headless_banner);
     loop {
-        match rx.recv().await {
+        match net.events_rx.recv().await {
             Ok(ev) => print_event(&ev),
             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
             Err(_) => break,

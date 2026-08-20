@@ -188,7 +188,7 @@ impl App {
     pub fn drain_network_events(&mut self) {
         // Non-blocking: take only what's ready right now.
         loop {
-            match self.network.events_tx.subscribe().try_recv() {
+            match self.network.events_rx.try_recv() {
                 Ok(ev) => self.apply_net_event(ev),
                 Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
                 Err(tokio::sync::broadcast::error::TryRecvError::Closed) => break,
@@ -641,4 +641,43 @@ pub fn dial(app: &mut App, label: String, token: String) {
         .engine
         .cmd_tx
         .send(EngineCmd::Dial { label, token });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use tokio::sync::{broadcast, mpsc, watch, Mutex};
+
+    use super::App;
+    use crate::network::{engine::EngineHandle, metrics, LogLevel, MeshState, NetEvent, Network};
+
+    #[tokio::test]
+    async fn drains_events_emitted_before_app_creation() {
+        let mesh = Arc::new(Mutex::new(MeshState::default()));
+        let metrics = metrics::spawn_collector(mesh.clone());
+        let (events_tx, events_rx) = broadcast::channel(8);
+        let (_public_ip_tx, public_ip) = watch::channel(None::<String>);
+        let (_nat_type_tx, nat_type) = watch::channel("unknown".to_string());
+        let (cmd_tx, _cmd_rx) = mpsc::unbounded_channel();
+
+        events_tx
+            .send(NetEvent::Log(LogLevel::Info, "connected".to_string()))
+            .unwrap();
+
+        let network = Network {
+            mesh,
+            metrics,
+            events_tx,
+            events_rx,
+            public_ip,
+            nat_type,
+            engine: EngineHandle { cmd_tx },
+        };
+        let mut app = App::new(network);
+        app.drain_network_events();
+
+        assert_eq!(app.log.len(), 1);
+        assert_eq!(app.log.front().unwrap().msg, "connected");
+    }
 }

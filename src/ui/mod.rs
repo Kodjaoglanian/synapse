@@ -512,3 +512,66 @@ pub fn link_style(l: crate::network::LinkKind) -> ratatui::style::Style {
         LinkKind::Relay => t::status_relay_style(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tokio::sync::{broadcast, mpsc, watch, Mutex};
+
+    use crate::app::App;
+    use crate::network::engine::EngineHandle;
+    use crate::network::metrics::{MetricsHandle, MetricsSnapshot};
+    use crate::network::{MeshState, Network, PeerState, PeerStatus};
+
+    #[test]
+    fn renders_connected_peer_in_graph_and_list_at_80x24() {
+        let mesh = Arc::new(Mutex::new(MeshState::default()));
+        let (metrics_tx, _metrics_rx) = mpsc::unbounded_channel();
+        let (_snapshot_tx, snapshot_rx) = watch::channel(MetricsSnapshot::default());
+        let (events_tx, events_rx) = broadcast::channel(8);
+        let (_public_ip_tx, public_ip) = watch::channel(None::<String>);
+        let (_nat_type_tx, nat_type) = watch::channel("unknown".to_string());
+        let (cmd_tx, _cmd_rx) = mpsc::unbounded_channel();
+        let network = Network {
+            mesh,
+            metrics: MetricsHandle {
+                cmd_tx: metrics_tx,
+                snapshot_rx,
+            },
+            events_tx,
+            events_rx,
+            public_ip,
+            nat_type,
+            engine: EngineHandle { cmd_tx },
+        };
+        let mut app = App::new(network);
+        app.snapshot.peers.insert(
+            1,
+            PeerState {
+                id: 1,
+                label: "bob".to_string(),
+                status: PeerStatus::Connected,
+                ..Default::default()
+            },
+        );
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal.draw(|frame| super::draw(frame, &mut app)).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let rendered = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer.get(x, y).symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains("● bob  direct"), "{rendered}");
+        assert!(rendered.contains("no active streams"), "{rendered}");
+    }
+}

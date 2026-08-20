@@ -162,6 +162,7 @@ pub struct Network {
     pub mesh: SharedMesh,
     pub metrics: MetricsHandle,
     pub events_tx: broadcast::Sender<NetEvent>,
+    pub events_rx: broadcast::Receiver<NetEvent>,
     pub public_ip: watch::Receiver<Option<String>>,
     pub nat_type: watch::Receiver<String>,
     pub engine: engine::EngineHandle,
@@ -170,7 +171,7 @@ pub struct Network {
 /// Build and spawn the whole network stack. Returns a [`Network`] handle.
 pub async fn spawn(config: NetworkConfig) -> anyhow::Result<Network> {
     let mesh: SharedMesh = Arc::new(Mutex::new(MeshState::default()));
-    let (events_tx, _) = broadcast::channel::<NetEvent>(256);
+    let (events_tx, events_rx) = broadcast::channel::<NetEvent>(256);
     let (public_ip_tx, public_ip_rx) = watch::channel(None);
     let (nat_type_tx, nat_type_rx) = watch::channel("unknown".to_string());
 
@@ -192,6 +193,7 @@ pub async fn spawn(config: NetworkConfig) -> anyhow::Result<Network> {
         mesh,
         metrics,
         events_tx,
+        events_rx,
         public_ip: public_ip_rx,
         nat_type: nat_type_rx,
         engine,

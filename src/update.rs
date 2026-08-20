@@ -9,6 +9,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
+use sha2::{Digest, Sha256};
 
 /// GitHub repository for release assets.
 const REPO: &str = "Kodjaoglanian/synapse";
@@ -45,9 +46,14 @@ pub fn run() -> Result<()> {
     println!("  downloading {asset_name}…");
     let data = download_asset(&asset.url)?;
     println!("  downloaded {} bytes", data.len());
+    verify_checksum(&latest, &asset_name, &data)?;
 
     // Write to a temp file, extract, and install.
-    let tmp = env::temp_dir().join("synapse-update");
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let tmp = env::temp_dir().join(format!("synapse-update-{}-{stamp}", std::process::id()));
     fs::create_dir_all(&tmp)?;
     let archive_path = tmp.join(&asset_name);
     fs::write(&archive_path, &data)?;
@@ -59,8 +65,10 @@ pub fn run() -> Result<()> {
     // Find the synapse binary inside the extracted dir.
     let binary = find_binary(&extract_dir)?;
     install_binary(&binary)?;
+    verify_install(latest_version)?;
+    let _ = fs::remove_dir_all(&tmp);
 
-    println!("  ✓ updated to v{}", latest.tag);
+    println!("  ✓ updated to {}", latest.tag);
     println!("  restart synapse to use the new version.");
     Ok(())
 }
@@ -151,6 +159,35 @@ fn download_asset(url: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+fn verify_checksum(release: &Release, asset_name: &str, data: &[u8]) -> Result<()> {
+    let checksums = release
+        .assets
+        .iter()
+        .find(|asset| asset.name == "synapse-checksums.txt")
+        .ok_or_else(|| anyhow!("release is missing synapse-checksums.txt"))?;
+    let body = download_asset(&checksums.url)?;
+    let body = String::from_utf8(body).context("checksums file is not UTF-8")?;
+    let expected = checksum_for(&body, asset_name)
+        .ok_or_else(|| anyhow!("checksum not found for {asset_name}"))?;
+    let actual = format!("{:x}", Sha256::digest(data));
+    if actual != expected {
+        return Err(anyhow!(
+            "checksum mismatch for {asset_name}: expected {expected}, got {actual}"
+        ));
+    }
+    println!("  checksum: verified");
+    Ok(())
+}
+
+fn checksum_for<'a>(body: &'a str, asset_name: &str) -> Option<&'a str> {
+    body.lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            Some((fields.next()?, fields.next()?))
+        })
+        .find_map(|(hash, name)| (name == asset_name).then_some(hash))
+}
+
 /// Extract a .tar.gz or .zip archive.
 fn extract_archive(archive: &PathBuf, dest: &PathBuf, name: &str) -> Result<()> {
     if name.ends_with(".tar.gz") {
@@ -227,6 +264,22 @@ fn find_binary(dir: &PathBuf) -> Result<PathBuf> {
     search(dir, exe_name).ok_or_else(|| anyhow!("binary '{exe_name}' not found in archive"))
 }
 
+fn verify_install(expected: &str) -> Result<()> {
+    let current_exe = env::current_exe().context("cannot determine installed executable")?;
+    let output = std::process::Command::new(&current_exe)
+        .arg("--version")
+        .output()
+        .context("failed to verify installed binary")?;
+    let version = String::from_utf8_lossy(&output.stdout);
+    if !output.status.success() || !version.split_whitespace().any(|part| part == expected) {
+        return Err(anyhow!(
+            "installed binary verification failed: expected v{expected}, got '{}'",
+            version.trim()
+        ));
+    }
+    Ok(())
+}
+
 /// Install the binary by replacing the current executable.
 fn install_binary(src: &PathBuf) -> Result<()> {
     let current_exe = env::current_exe().context("cannot determine current executable")?;
@@ -242,7 +295,12 @@ fn install_binary(src: &PathBuf) -> Result<()> {
     } else {
         // On Unix, write to a temp file then atomically rename.
         let tmp = current_exe.with_extension("new");
-        fs::copy(src, &tmp).context("failed to copy new binary")?;
+        let permission_hint = format!(
+            "cannot update '{}'; if it is system-owned, run `sudo {} update`",
+            current_exe.display(),
+            current_exe.display()
+        );
+        fs::copy(src, &tmp).with_context(|| permission_hint.clone())?;
 
         // Preserve permissions.
         #[cfg(unix)]
@@ -252,10 +310,26 @@ fn install_binary(src: &PathBuf) -> Result<()> {
             fs::set_permissions(&tmp, perms)?;
         }
 
-        fs::rename(&tmp, &current_exe).context("failed to replace binary")?;
+        fs::rename(&tmp, &current_exe).with_context(|| permission_hint)?;
     }
 
     print!("  installing…");
     io::stdout().flush()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::checksum_for;
+
+    #[test]
+    fn selects_checksum_for_exact_asset() {
+        let body =
+            "# checksums\nabc  synapse-v0.2.3-linux.tar.gz\ndef  synapse-v0.2.30-linux.tar.gz\n";
+        assert_eq!(
+            checksum_for(body, "synapse-v0.2.3-linux.tar.gz"),
+            Some("abc")
+        );
+        assert_eq!(checksum_for(body, "synapse-v0.2.3-linux.zip"), None);
+    }
 }

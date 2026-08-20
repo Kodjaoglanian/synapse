@@ -183,6 +183,8 @@ async fn handle_conn(
     let metrics_down = metrics.clone();
     let events_up = events.clone();
     let events_down = events.clone();
+    let mesh_up = mesh.clone();
+    let mesh_down = mesh.clone();
     let dc_up = dc.clone();
 
     // tcp -> dc (upload)
@@ -206,12 +208,27 @@ async fn handle_conn(
                 break;
             }
             total += n as u64;
+            {
+                let mut g = mesh_up.lock().await;
+                if let Some(stream) = g.streams.get_mut(&sid) {
+                    stream.status = StreamStatus::Transferring;
+                    stream.bytes_sent = total;
+                }
+            }
             let _ = metrics_up
                 .cmd_tx
                 .send(crate::network::metrics::MetricsCmd::Bytes {
                     peer: peer_id,
                     sent: n as u64,
                     recv: 0,
+                });
+            let _ = metrics_up
+                .cmd_tx
+                .send(crate::network::metrics::MetricsCmd::Packets {
+                    peer: peer_id,
+                    sent: 1,
+                    recv: 0,
+                    lost: 0,
                 });
             let _ = events_up.send(NetEvent::StreamUpdated(StreamInfo {
                 id: sid,
@@ -240,12 +257,27 @@ async fn handle_conn(
                 break;
             }
             total += n as u64;
+            {
+                let mut g = mesh_down.lock().await;
+                if let Some(stream) = g.streams.get_mut(&sid) {
+                    stream.status = StreamStatus::Transferring;
+                    stream.bytes_recv = total;
+                }
+            }
             let _ = metrics_down
                 .cmd_tx
                 .send(crate::network::metrics::MetricsCmd::Bytes {
                     peer: peer_id,
                     sent: 0,
                     recv: n as u64,
+                });
+            let _ = metrics_down
+                .cmd_tx
+                .send(crate::network::metrics::MetricsCmd::Packets {
+                    peer: peer_id,
+                    sent: 0,
+                    recv: 1,
+                    lost: 0,
                 });
             let _ = events_down.send(NetEvent::StreamUpdated(StreamInfo {
                 id: sid,
