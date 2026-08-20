@@ -90,8 +90,12 @@ jobs:
           mkdir "$STAGING"
           cp "target/${TARGET}/release/synapse" "$STAGING/"
           cp README.md LICENSE CHANGELOG.md "$STAGING/" 2>/dev/null || true
-          # Generate SHA256 checksum for the binary.
-          sha256sum "target/${TARGET}/release/synapse" | awk '{print $1}' > "${STAGING}.sha256"
+          # Generate SHA256 checksum (portable: works on Linux and macOS).
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "target/${TARGET}/release/synapse" | awk '{print $1}' > "${STAGING}.sha256"
+          else
+            shasum -a 256 "target/${TARGET}/release/synapse" | awk '{print $1}' > "${STAGING}.sha256"
+          fi
           tar czf "${STAGING}.tar.gz" "$STAGING"
           echo "ASSET=${STAGING}.tar.gz" >> $GITHUB_ENV
           echo "CHECKSUM=${STAGING}.sha256" >> $GITHUB_ENV
