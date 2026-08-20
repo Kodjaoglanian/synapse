@@ -508,27 +508,26 @@ pub fn link_style(l: crate::network::LinkKind) -> ratatui::style::Style {
 /// Debug overlay showing snapshot peer count and status.
 fn draw_debug_overlay(f: &mut Frame, app: &App) {
     let area = f.size();
+    let peer_count = app.snapshot.peers.len();
     let overlay = Rect {
-        x: area.width.saturating_sub(40),
+        x: area.width.saturating_sub(50),
         y: 1,
-        width: 38,
-        height: 4 + app.snapshot.peers.len() as u16,
+        width: 48,
+        height: 3 + (peer_count as u16) * 2,
     };
-    let peers: Vec<String> = app
-        .snapshot
-        .peers
-        .values()
-        .map(|p| format!("  {} {:?}", p.label, p.status))
-        .collect();
-    let mut lines = vec![
-        ratatui::text::Line::styled(
-            format!("[DBG] peers: {}", app.snapshot.peers.len()),
-            t::status_warn_style(),
-        ),
-        ratatui::text::Line::styled(format!("      tick: {}", app.tick), t::dim_style()),
-    ];
-    for p in peers {
-        lines.push(ratatui::text::Line::styled(p, t::status_ok_style()));
+    let mut lines = vec![ratatui::text::Line::styled(
+        format!("[DBG] peers={} tick={}", peer_count, app.tick),
+        t::status_warn_style(),
+    )];
+    for p in app.snapshot.peers.values() {
+        lines.push(ratatui::text::Line::styled(
+            format!("  {} {:?}", p.label, p.status),
+            t::status_ok_style(),
+        ));
+        lines.push(ratatui::text::Line::styled(
+            format!("  link={:?} rtt={} relayed={}", p.link, p.rtt_ms, p.relayed),
+            t::dim_style(),
+        ));
     }
     f.render_widget(
         ratatui::widgets::Paragraph::new(lines)
