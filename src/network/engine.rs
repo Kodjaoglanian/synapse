@@ -485,7 +485,24 @@ async fn create_pc_with_ice_hook(
         let events_dc = events_dc.clone();
         let metrics_dc = metrics_dc.clone();
         Box::pin(async move {
-            wire_data_channel(&dc, &label, peer_id, mesh_dc, events_dc, metrics_dc).await;
+            // Read our own label from the mesh to send via hello.
+            let local_label = {
+                let g = mesh_dc.lock().await;
+                g.peers
+                    .get(&peer_id)
+                    .map(|p| p.label.clone())
+                    .unwrap_or_default()
+            };
+            wire_data_channel(
+                &dc,
+                &label,
+                peer_id,
+                local_label,
+                mesh_dc,
+                events_dc,
+                metrics_dc,
+            )
+            .await;
         })
     }));
 
@@ -518,23 +535,58 @@ async fn wire_data_channel(
     dc: &Arc<RTCDataChannel>,
     label: &str,
     peer_id: PeerId,
+    local_label: String,
     mesh: SharedMesh,
     events: broadcast::Sender<NetEvent>,
     metrics: MetricsHandle,
 ) {
     let label_owned = label.to_string();
-    // Control channel: handle pings/pongs for RTT.
+    // Control channel: handle pings/pongs for RTT + label exchange.
     if label == "synapse-ctrl" {
+        // Send our label to the remote peer when the channel opens.
+        let dc_hello = Arc::clone(dc);
+        let events_hello = events.clone();
+        let hello_msg = format!("hello:{local_label}");
+        dc.on_open(Box::new(move || {
+            let dc_hello = Arc::clone(&dc_hello);
+            let events_hello = events_hello.clone();
+            let hello_msg = hello_msg.clone();
+            Box::pin(async move {
+                let _ = dc_hello.send(&Bytes::from(hello_msg)).await;
+                emit_log(
+                    &events_hello,
+                    LogLevel::Handshake,
+                    "control channel open — sent hello".to_string(),
+                );
+            })
+        }));
+
         let dc_ping = Arc::clone(dc);
         let mesh_ping = mesh.clone();
         let metrics_ping = metrics.clone();
+        let mesh_hello = mesh.clone();
+        let events_hello = events.clone();
         dc.on_message(Box::new(move |msg| {
             let dc_ping = Arc::clone(&dc_ping);
             let mesh_ping = mesh_ping.clone();
             let metrics_ping = metrics_ping.clone();
+            let mesh_hello = mesh_hello.clone();
+            let events_hello = events_hello.clone();
             Box::pin(async move {
                 let data = String::from_utf8_lossy(&msg.data);
-                if let Some(rest) = data.strip_prefix("ping:") {
+                if let Some(rest) = data.strip_prefix("hello:") {
+                    // Remote peer announced their label — update our peer state.
+                    let remote_label = rest.to_string();
+                    emit_log(
+                        &events_hello,
+                        LogLevel::Handshake,
+                        format!("remote label: {remote_label}"),
+                    );
+                    update_peer_state(&mesh_hello, peer_id, |p| {
+                        p.label = remote_label.clone();
+                    })
+                    .await;
+                } else if let Some(rest) = data.strip_prefix("ping:") {
                     // Reply with pong:<ts>.
                     let _ = dc_ping.send(&Bytes::from(format!("pong:{rest}"))).await;
                 } else if let Some(rest) = data.strip_prefix("pong:") {
@@ -683,6 +735,7 @@ async fn handle_dial(
         &ctrl,
         "synapse-ctrl",
         peer_id,
+        label.clone(),
         mesh.clone(),
         events.clone(),
         metrics.clone(),
@@ -1050,6 +1103,7 @@ async fn signaling_dial(
         &ctrl,
         "synapse-ctrl",
         peer_id,
+        label.clone(),
         mesh.clone(),
         events.clone(),
         metrics.clone(),

@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.1.9] - 2025-01-20
+
+### Fixed
+
+- **Peer label shows local name instead of remote**: when alice dials bob,
+  alice's TUI showed "alice" instead of "bob". Now peers exchange labels
+  via the control channel (`hello:<label>`) on connection. Each peer updates
+  the remote peer's label in the mesh, so the TUI shows the correct remote
+  name.
+
 ## [0.1.8] - 2025-01-20
 
 ### Fixed
