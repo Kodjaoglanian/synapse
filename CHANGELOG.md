@@ -15,6 +15,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.1.1] - 2025-01-20
+
+### Added
+
+- **PowerShell install script** (`install.ps1`): one-line install for Windows
+  with automatic PATH configuration.
+- **SHA256 checksums**: per-target checksums and a combined
+  `synapse-checksums.txt` file published with each release.
+- **Post-release verification job**: CI downloads and verifies binaries after
+  publishing.
+- **Lockfile check**: CI verifies `Cargo.lock` is committed and up to date.
+
+### Changed
+
+- **ASCII banner**: replaced generic figlet banner with the synapse logo.
+- **CI pipeline**: split into parallel lint/build/smoke-test jobs with
+  fail-fast lint gate, concurrency control, and per-job timeouts.
+- **Release pipeline**: fat LTO + single codegen unit for optimized binaries,
+  debug symbol stripping on Unix, cache keyed by `Cargo.lock` hash.
+- **Release notes**: auto-generated with download table and checksum
+  verification instructions.
+- **macOS x86_64 builds**: cross-compiled on `macos-14` (Apple Silicon) instead
+  of deprecated `macos-13` runner.
+
+### Fixed
+
+- Resolved all clippy warnings (large_enum_variant, collapsible_if,
+  manual_saturating_arithmetic, unnecessary_cast, identity_op, for_kv_map).
+- `EngineCmd::RemoteSdp` now boxes `RTCSessionDescription` (592 → 16 bytes).
+
 ## [0.1.0] - 2025-01-20
 
 ### Added
