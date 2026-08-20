@@ -225,9 +225,11 @@ jobs:
           set -eu
           VERSION=${GITHUB_REF#refs/tags/}
           BASE="https://github.com/${{ github.repository }}/releases/download/${VERSION}"
-          curl -fsSL "$BASE/synapse-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/synapse.tar.gz
-          curl -fsSL "$BASE/synapse-checksums.txt" -o /tmp/checksums.txt
-          cd /tmp && grep "x86_64-unknown-linux-gnu.tar.gz" checksums.txt | sha256sum -c -
-          tar xzf synapse.tar.gz
+          ASSET="synapse-${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          cd /tmp
+          curl -fsSL "$BASE/$ASSET" -o "$ASSET"
+          curl -fsSL "$BASE/synapse-checksums.txt" -o checksums.txt
+          grep "$ASSET" checksums.txt | sha256sum -c -
+          tar xzf "$ASSET"
           ./synapse-${VERSION}-x86_64-unknown-linux-gnu/synapse --version
           echo "✓ Linux x86_64 binary verified"
