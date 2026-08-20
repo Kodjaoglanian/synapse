@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.1.4] - 2025-01-20
+
+### Fixed
+
+- **Peer status not updating in graph**: the `on_peer_connection_state_change`
+  callback was downgrading peer status from `Connected` back to `Connecting`
+  when transient PC states fired after ICE had already connected. Now only
+  updates for terminal states (Connected, Failed, Closed, Disconnected).
+
+### Changed
+
+- **Graph visibility**: peer nodes are now a 3x3 point cluster instead of a
+  single point. Added a peer list with status icons and labels below the
+  graph canvas. Larger animated halo for connected peers.
+
 ## [0.1.3] - 2025-01-20
 
 ### Added
