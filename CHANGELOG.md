@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.2.0] - 2025-01-20
+
+### Fixed
+
+- **Control channel not stored on responder side**: the responder (bob) never
+  stored the control data channel in its PeerCtx, so the ping loop couldn't
+  find it — no RTT measurement, no traffic, no events. Now `on_data_channel`
+  stores the ctrl channel in PeerCtx.
+- **Hello label exchange not working**: `on_open` doesn't fire reliably in
+  webrtc-rs 0.11, so the `hello:<label>` message was never sent. Replaced with
+  a polling task that sends hello every 500ms (up to 10s) once the channel is
+  open. Peers now correctly see each other's names in the TUI.
+- **`create_pc_with_ice_hook` now receives `peers`**: needed so the
+  `on_data_channel` callback can store the control channel in the right
+  PeerCtx.
+
 ## [0.1.9] - 2025-01-20
 
 ### Fixed

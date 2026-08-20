@@ -1,6 +1,6 @@
 [package]
 name = "synapse"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2021"
 authors = ["Kodjaoglanian"]
 description = "Decentralized P2P tunneling platform with a high-end terminal UI"
