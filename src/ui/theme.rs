@@ -124,12 +124,11 @@ pub fn panel_title(prefix: &str, name: &str) -> Line<'static> {
     ])
 }
 
-/// Compact ASCII art for the header banner. Kept narrow so it fits small terms.
+/// ASCII art for the header banner.
 pub fn ascii_banner() -> &'static str {
-    r"
-  ___ _   _ ___ _   _ ___ ___  ___ ___ ___
- / __| | | / __| | | | __/ _ \| _ \ __| _ \
- \__ \ |_| \__ \ |_| | _| (_) |   / _||   /
- |___/\__,_|___/\__,_|___\___/|_|_\___|_|_\
-"
+    r"//   ) ) \\    / / /|    / / // | |     //   ) ) //   ) )  //   / /
+((         \\  / / //|   / / //__| |    //___/ / ((        //____
+  \\        \\/ / // |  / / / ___  |   / ____ /    \\     / ____
+    ) )      / / //  | / / //    | |  //             ) ) //
+((___ / /      / / //   |/ / //     | | //       ((___ / / //____/ /"
 }

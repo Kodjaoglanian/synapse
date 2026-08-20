@@ -25,7 +25,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     // Left: ASCII art. Right: stats grid.
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(46), Constraint::Min(0)])
+        .constraints([Constraint::Length(70), Constraint::Min(0)])
         .split(inner);
 
     // Banner.
