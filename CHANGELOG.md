@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.2.1] - 2025-01-20
+
+### Fixed
+
+- **Hello label exchange still not working**: the separate hello task could
+  send before the responder's `on_message` handler was registered, so the
+  hello was lost. Moved hello into the ping loop — now `hello:<label>` is
+  sent every ~10s (every 5th ping tick) alongside pings. This is reliable
+  because the ping loop already works on both sides. Removed the separate
+  hello task and the `local_label` parameter from `wire_data_channel`.
+
 ## [0.2.0] - 2025-01-20
 
 ### Fixed

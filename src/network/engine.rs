@@ -500,14 +500,6 @@ async fn create_pc_with_ice_hook(
         let metrics_dc = metrics_dc.clone();
         let peers_dc = peers_dc.clone();
         Box::pin(async move {
-            // Read our own label from the mesh to send via hello.
-            let local_label = {
-                let g = mesh_dc.lock().await;
-                g.peers
-                    .get(&peer_id)
-                    .map(|p| p.label.clone())
-                    .unwrap_or_default()
-            };
             // Store control channel in PeerCtx so ping loop can use it.
             if label == "synapse-ctrl" {
                 let mut g = peers_dc.lock().await;
@@ -515,16 +507,7 @@ async fn create_pc_with_ice_hook(
                     ctx.ctrl = Some(Arc::clone(&dc));
                 }
             }
-            wire_data_channel(
-                &dc,
-                &label,
-                peer_id,
-                local_label,
-                mesh_dc,
-                events_dc,
-                metrics_dc,
-            )
-            .await;
+            wire_data_channel(&dc, &label, peer_id, mesh_dc, events_dc, metrics_dc).await;
         })
     }));
 
@@ -557,7 +540,6 @@ async fn wire_data_channel(
     dc: &Arc<RTCDataChannel>,
     label: &str,
     peer_id: PeerId,
-    local_label: String,
     mesh: SharedMesh,
     events: broadcast::Sender<NetEvent>,
     metrics: MetricsHandle,
@@ -565,35 +547,8 @@ async fn wire_data_channel(
     let label_owned = label.to_string();
     // Control channel: handle pings/pongs for RTT + label exchange.
     if label == "synapse-ctrl" {
-        // Spawn a task that sends hello:<label> once the channel is open.
-        // We can't rely on on_open firing reliably in webrtc-rs 0.11.
-        let dc_hello = Arc::clone(dc);
-        let events_hello = events.clone();
-        let hello_msg = format!("hello:{local_label}");
-        tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(Duration::from_millis(500));
-            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            for _ in 0..20 {
-                // 10s max
-                ticker.tick().await;
-                if is_dc_open(&dc_hello)
-                    && dc_hello.send(&Bytes::from(hello_msg.clone())).await.is_ok()
-                {
-                    emit_log(
-                        &events_hello,
-                        LogLevel::Handshake,
-                        format!("sent hello: {hello_msg}"),
-                    );
-                    return;
-                }
-            }
-            emit_log(
-                &events_hello,
-                LogLevel::Warn,
-                "failed to send hello after 10s".to_string(),
-            );
-        });
-
+        // Hello is sent by the ping loop (spawn_ping_loop) every ~10s.
+        // Here we only handle incoming messages.
         let dc_ping = Arc::clone(dc);
         let mesh_ping = mesh.clone();
         let metrics_ping = metrics.clone();
@@ -769,7 +724,6 @@ async fn handle_dial(
         &ctrl,
         "synapse-ctrl",
         peer_id,
-        label.clone(),
         mesh.clone(),
         events.clone(),
         metrics.clone(),
@@ -802,7 +756,7 @@ async fn handle_dial(
             peer_id,
             PeerCtx {
                 id: peer_id,
-                label,
+                label: label.clone(),
                 pc,
                 ctrl: Some(ctrl),
                 tunnels: HashMap::new(),
@@ -811,8 +765,14 @@ async fn handle_dial(
         );
     }
 
-    // Spawn a ping loop for RTT measurement.
-    spawn_ping_loop(peer_id, peers.clone(), events.clone(), metrics.clone());
+    // Spawn a ping loop for RTT measurement + label exchange.
+    spawn_ping_loop(
+        peer_id,
+        label,
+        peers.clone(),
+        events.clone(),
+        metrics.clone(),
+    );
     Ok(())
 }
 
@@ -1055,7 +1015,7 @@ async fn handle_quick_connect(
             peer_id,
             PeerCtx {
                 id: peer_id,
-                label,
+                label: label.clone(),
                 pc,
                 ctrl: None,
                 tunnels: HashMap::new(),
@@ -1063,7 +1023,13 @@ async fn handle_quick_connect(
             },
         );
     }
-    spawn_ping_loop(peer_id, peers.clone(), events.clone(), metrics.clone());
+    spawn_ping_loop(
+        peer_id,
+        label,
+        peers.clone(),
+        events.clone(),
+        metrics.clone(),
+    );
     Ok(())
 }
 
@@ -1138,7 +1104,6 @@ async fn signaling_dial(
         &ctrl,
         "synapse-ctrl",
         peer_id,
-        label.clone(),
         mesh.clone(),
         events.clone(),
         metrics.clone(),
@@ -1186,7 +1151,13 @@ async fn signaling_dial(
             },
         );
     }
-    spawn_ping_loop(peer_id, Arc::clone(peers), events.clone(), metrics.clone());
+    spawn_ping_loop(
+        peer_id,
+        label.clone(),
+        Arc::clone(peers),
+        events.clone(),
+        metrics.clone(),
+    );
 
     // Poll for the remote answer.
     let answer_json = poll_signal(
@@ -1342,7 +1313,7 @@ async fn signaling_answer(
             peer_id,
             PeerCtx {
                 id: peer_id,
-                label,
+                label: label.clone(),
                 pc: Arc::clone(&pc),
                 ctrl: None, // control channel arrives via on_data_channel
                 tunnels: HashMap::new(),
@@ -1350,7 +1321,13 @@ async fn signaling_answer(
             },
         );
     }
-    spawn_ping_loop(peer_id, Arc::clone(peers), events.clone(), metrics.clone());
+    spawn_ping_loop(
+        peer_id,
+        label.clone(),
+        Arc::clone(peers),
+        events.clone(),
+        metrics.clone(),
+    );
 
     // Drain remote ICE candidates (side a) and add them.
     spawn_ice_drain(
@@ -1442,8 +1419,10 @@ fn spawn_ice_drain(
 }
 
 /// Spawn a periodic ping loop over the control channel to measure RTT.
+/// Also sends `hello:<label>` every ~10s so the remote peer learns our name.
 fn spawn_ping_loop(
     peer_id: PeerId,
+    local_label: String,
     peers: Arc<Mutex<HashMap<PeerId, PeerCtx>>>,
     events: broadcast::Sender<NetEvent>,
     metrics: MetricsHandle,
@@ -1451,8 +1430,10 @@ fn spawn_ping_loop(
     tokio::spawn(async move {
         let mut ticker = time::interval(Duration::from_secs(2));
         ticker.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+        let mut tick_count: u32 = 0;
         loop {
             ticker.tick().await;
+            tick_count = tick_count.wrapping_add(1);
             let ctrl = {
                 let g = peers.lock().await;
                 g.get(&peer_id).and_then(|c| c.ctrl.clone())
@@ -1463,6 +1444,15 @@ fn spawn_ping_loop(
             if !is_dc_open(&ctrl) {
                 continue;
             }
+
+            // Send hello:<label> every ~10s (every 5th tick) so the remote
+            // peer learns/updates our name. Repeated because on_message may
+            // not be registered yet on the first send.
+            if tick_count % 5 == 1 {
+                let hello = format!("hello:{local_label}");
+                let _ = ctrl.send(&Bytes::from(hello)).await;
+            }
+
             let ts = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
