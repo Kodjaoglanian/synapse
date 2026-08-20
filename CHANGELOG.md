@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.1.5] - 2025-01-20
+
+### Fixed
+
+- **Stale ICE candidates causing connection failures**: the signaling server
+  now clears all room data (offer, answer, ICE candidates) when a new offer is
+  posted. Previously, candidates from previous sessions accumulated and caused
+  ICE to fail by trying dead ports.
+- **CI redundant builds**: removed the multi-arch build matrix from CI — the
+  Release workflow already builds all targets. CI now only does lint + smoke
+  test + lockfile check.
+- **CI duplicate triggers**: removed `tags: ['v*']` from CI triggers. Tags now
+  only trigger the Release workflow.
+
 ## [0.1.4] - 2025-01-20
 
 ### Fixed

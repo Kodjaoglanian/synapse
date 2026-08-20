@@ -40,6 +40,13 @@ class H(BaseHTTPRequestHandler):
         if k.startswith("ice/"):
             prev = store.get(k, b"")
             store[k] = prev + (b"\n" if prev else b"") + data
+        elif k.startswith("offer/"):
+            # New offer -> clear all stale data for this room.
+            room = k.split("/", 1)[1]
+            for key in list(store):
+                if key == f"offer/{room}" or key == f"answer/{room}" or key.startswith(f"ice/{room}/"):
+                    del store[key]
+            store[k] = data
         else:
             store[k] = data
         self._send(200)
