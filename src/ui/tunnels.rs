@@ -22,7 +22,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         } else {
             t::panel_border_style()
         })
-        .title(t::panel_title("⇄", "Tunnels & Streams"));
+        .title(t::panel_title("⇄", crate::i18n::t().title_tunnels));
     f.render_widget(block, area);
 
     let inner = area.inner(&ratatui::layout::Margin {

@@ -93,11 +93,12 @@ fn centered(area: Rect, w: u16, h: u16) -> Rect {
 fn draw_help(f: &mut Frame, _app: &App) {
     let area = centered(f.size(), 52, 14);
     f.render_widget(Clear, area);
+    let tx = crate::i18n::t();
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(t::panel_border_active_style())
-        .title(t::panel_title("?", "Help"));
+        .title(t::panel_title("?", tx.title_help));
     f.render_widget(block, area);
 
     let lines = vec![
@@ -108,38 +109,38 @@ fn draw_help(f: &mut Frame, _app: &App) {
         ratatui::text::Line::raw(""),
         ratatui::text::Line::from(vec![
             ratatui::text::Span::styled("  Tab / Shift-Tab ", t::status_ok_style()),
-            ratatui::text::Span::raw("  switch panel"),
+            ratatui::text::Span::raw(format!("  {}", tx.help_line1)),
         ]),
         ratatui::text::Line::from(vec![
             ratatui::text::Span::styled("  j / k  or  ↑/↓  ", t::status_ok_style()),
-            ratatui::text::Span::raw("  navigate list"),
+            ratatui::text::Span::raw(format!("  {}", tx.help_line2)),
         ]),
         ratatui::text::Line::from(vec![
             ratatui::text::Span::styled("  Enter           ", t::status_ok_style()),
-            ratatui::text::Span::raw("  inspect node / submit"),
+            ratatui::text::Span::raw(format!("  {}", tx.help_line3)),
         ]),
         ratatui::text::Line::from(vec![
             ratatui::text::Span::styled("  n               ", t::status_ok_style()),
-            ratatui::text::Span::raw("  new tunnel / quick-connect (paste SDP)"),
+            ratatui::text::Span::raw(format!("  {}", tx.help_line4)),
         ]),
         ratatui::text::Line::from(vec![
             ratatui::text::Span::styled("  s               ", t::status_ok_style()),
-            ratatui::text::Span::raw("  connect via signaling server (by room)"),
+            ratatui::text::Span::raw(format!("  {}", tx.help_line5)),
         ]),
         ratatui::text::Line::from(vec![
             ratatui::text::Span::styled("  d               ", t::status_ok_style()),
-            ratatui::text::Span::raw("  disconnect peer"),
+            ratatui::text::Span::raw(format!("  {}", tx.help_line6)),
         ]),
         ratatui::text::Line::from(vec![
             ratatui::text::Span::styled("  ?               ", t::status_ok_style()),
-            ratatui::text::Span::raw("  this help"),
+            ratatui::text::Span::raw(format!("  {}", tx.help_line7)),
         ]),
         ratatui::text::Line::from(vec![
             ratatui::text::Span::styled("  q / Ctrl-C      ", t::status_ok_style()),
-            ratatui::text::Span::raw("  quit"),
+            ratatui::text::Span::raw(format!("  {}", tx.help_line8)),
         ]),
         ratatui::text::Line::raw(""),
-        ratatui::text::Line::styled("Press Esc/Enter to close", t::dim_style()),
+        ratatui::text::Line::styled(tx.help_close, t::dim_style()),
     ];
     let p = ratatui::widgets::Paragraph::new(lines).style(
         ratatui::style::Style::default()
@@ -234,7 +235,7 @@ fn draw_quick_connect(f: &mut Frame, _app: &App, form: &crate::app::QuickConnect
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(t::panel_border_active_style())
-        .title(t::panel_title("⇄", "Quick Connect — paste SDP"));
+        .title(t::panel_title("⇄", crate::i18n::t().title_quick_connect));
     f.render_widget(block, area);
 
     let inner = area.inner(&ratatui::layout::Margin {
@@ -339,7 +340,7 @@ fn draw_signaling_room(f: &mut Frame, _app: &App, form: &crate::app::SignalingRo
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(t::panel_border_active_style())
-        .title(t::panel_title("⇄", "Connect via signaling server"));
+        .title(t::panel_title("⇄", crate::i18n::t().title_signaling));
     f.render_widget(block, area);
 
     let inner = area.inner(&ratatui::layout::Margin {

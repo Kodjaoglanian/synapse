@@ -15,7 +15,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(t::panel_border_style())
-        .title(t::panel_title("≋", "Throughput & Events"));
+        .title(t::panel_title("≋", crate::i18n::t().title_throughput));
     f.render_widget(block, area);
 
     let inner = area.inner(&ratatui::layout::Margin {
@@ -109,7 +109,7 @@ fn draw_log(f: &mut Frame, app: &App, area: Rect) {
         } else {
             t::panel_border_style()
         })
-        .title(t::panel_title("≡", "Event Stream"));
+        .title(t::panel_title("≡", crate::i18n::t().title_events));
     f.render_widget(block, area);
 
     let inner = area.inner(&ratatui::layout::Margin {

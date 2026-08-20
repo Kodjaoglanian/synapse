@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.1.2] - 2025-01-20
+
+### Added
+
+- **NAT discovery (real)**: STUN Binding Request (RFC 5389) over UDP with
+  XOR-MAPPED-ADDRESS parsing. Falls back to HTTP IP lookup APIs if STUN fails.
+  The public IP and NAT type now appear in the header within seconds.
+- **i18n support**: `--lang` CLI flag (or `SYNAPSE_LANG` env var) to select
+  UI language. Supports `en` (English) and `pt` (Português).
+
+### Changed
+
+- **Release pipeline**: removed fat LTO override (use `thin` from Cargo.toml)
+  for faster Windows builds. Added `--locked` for reproducible builds.
+
 ## [0.1.1] - 2025-01-20
 
 ### Added

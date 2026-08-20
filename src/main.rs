@@ -11,6 +11,7 @@
 
 mod app;
 mod events;
+mod i18n;
 mod network;
 mod ui;
 
@@ -67,10 +68,17 @@ struct Cli {
     /// Run without a TTY (headless): just start the network stack and log to stdout.
     #[arg(long)]
     headless: bool,
+
+    /// UI language: `en` (English, default) or `pt` (Português).
+    #[arg(long, value_enum, env = "SYNAPSE_LANG", default_value = "en")]
+    lang: i18n::Lang,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Initialize i18n with the selected language.
+    i18n::init(cli.lang);
 
     let stun = if cli.stun.is_empty() {
         default_stun_servers()
@@ -180,7 +188,7 @@ async fn run_tui(net: network::Network) -> Result<()> {
 async fn run_headless(net: network::Network) -> Result<()> {
     let mut rx = net.events_tx.subscribe();
     // Print a startup banner.
-    println!("synapse headless — Ctrl-C to stop");
+    println!("{}", i18n::t().headless_banner);
     loop {
         match rx.recv().await {
             Ok(ev) => print_event(&ev),

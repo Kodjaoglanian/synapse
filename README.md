@@ -155,6 +155,7 @@ synapse --headless --signaling http://server:8080 --dial-room alice:room1
 | `--dial-room LABEL:ROOM` | Dial a peer via signaling (repeatable) | |
 | `--answer-room LABEL:ROOM` | Answer a peer via signaling (repeatable) | |
 | `--headless` | Run without TUI, log to stdout | |
+| `--lang <en\|pt>` | UI language: English or Português | `en` (env `SYNAPSE_LANG`) |
 
 ## TUI keybindings
 

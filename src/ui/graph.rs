@@ -29,7 +29,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         } else {
             t::panel_border_style()
         })
-        .title(t::panel_title("⬡", "Mesh Graph"));
+        .title(t::panel_title("⬡", crate::i18n::t().title_mesh_graph));
     f.render_widget(block, area);
 
     let inner = area.inner(&ratatui::layout::Margin {

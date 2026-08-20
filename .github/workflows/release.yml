@@ -68,11 +68,10 @@ jobs:
           key: release-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
         env:
-          # Fat LTO + single codegen unit for maximum optimization.
-          CARGO_PROFILE_RELEASE_LTO: fat
-          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+          # Strip debug symbols on Unix (smaller binaries). LTO and
+          # codegen-units are already set in Cargo.toml.
           CARGO_PROFILE_RELEASE_STRIP: ${{ matrix.strip }}
 
       - name: Get version

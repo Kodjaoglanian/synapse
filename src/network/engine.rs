@@ -1397,6 +1397,10 @@ fn spawn_ping_loop(
 }
 
 /// Best-effort NAT/public-IP discovery via a STUN binding request.
+///
+/// Sends a raw STUN Binding Request (RFC 5389) over UDP to the first reachable
+/// STUN server and parses the XOR-MAPPED-ADDRESS from the response to extract
+/// the public IP. Falls back to an HTTP IP lookup API if STUN fails.
 fn spawn_nat_discovery(
     stun_servers: Vec<String>,
     public_ip_tx: watch::Sender<Option<String>>,
@@ -1405,22 +1409,259 @@ fn spawn_nat_discovery(
 ) {
     tokio::spawn(async move {
         if stun_servers.is_empty() {
-            let _ = nat_type_tx.send("none (no STUN)".into());
+            // No STUN configured — try HTTP fallback directly.
+            if let Some(ip) = http_ip_lookup().await {
+                let _ = public_ip_tx.send(Some(ip.clone()));
+                let _ = nat_type_tx.send("unknown (no STUN)".into());
+                emit_log(
+                    &events,
+                    LogLevel::Info,
+                    format!("public IP: {ip} (via HTTP)"),
+                );
+            } else {
+                let _ = nat_type_tx.send("none (no STUN)".into());
+                emit_log(
+                    &events,
+                    LogLevel::Warn,
+                    "NAT discovery: no STUN and HTTP lookup failed",
+                );
+            }
             return;
         }
-        // webrtc-rs exposes ICE agent candidate gathering; we approximate public
-        // IP discovery by reading the first srflx candidate produced. Because we
-        // don't have a live PC here, we fall back to a UDP STUN probe using the
-        // `stun-rs`-style manual request would add a dependency; instead we mark
-        // discovery as pending and let the first peer's ICE state fill it in.
-        let _ = public_ip_tx.send(None);
-        let _ = nat_type_tx.send("unknown (pending ICE)".into());
+
+        // Try each STUN server until one responds.
+        for stun_url in &stun_servers {
+            if let Some((ip, nat)) = stun_probe(stun_url).await {
+                let _ = public_ip_tx.send(Some(ip.clone()));
+                let _ = nat_type_tx.send(nat.clone());
+                emit_log(
+                    &events,
+                    LogLevel::Info,
+                    format!("NAT discovery: public IP {ip}, NAT type: {nat}"),
+                );
+                return;
+            }
+        }
+
+        // All STUN servers failed — try HTTP fallback.
         emit_log(
             &events,
-            LogLevel::Info,
-            "NAT discovery: awaiting first ICE gathering",
+            LogLevel::Warn,
+            "STUN probes failed, trying HTTP fallback",
         );
+        if let Some(ip) = http_ip_lookup().await {
+            let _ = public_ip_tx.send(Some(ip.clone()));
+            let _ = nat_type_tx.send("unknown (STUN failed)".into());
+            emit_log(
+                &events,
+                LogLevel::Info,
+                format!("public IP: {ip} (via HTTP fallback)"),
+            );
+        } else {
+            let _ = nat_type_tx.send("unreachable".into());
+            emit_log(
+                &events,
+                LogLevel::Error,
+                "NAT discovery: all methods failed",
+            );
+        }
     });
+}
+
+/// Send a STUN Binding Request over UDP and parse the XOR-MAPPED-ADDRESS.
+async fn stun_probe(stun_url: &str) -> Option<(String, String)> {
+    // Parse "stun:host:port" or "stun:host" (default port 3478).
+    let addr_str = stun_url
+        .strip_prefix("stun:")
+        .or_else(|| stun_url.strip_prefix("stuns:"))
+        .unwrap_or(stun_url);
+    let (host, port) = match addr_str.rsplit_once(':') {
+        Some((h, p)) if p.parse::<u16>().is_ok() => (h, p.parse::<u16>().unwrap()),
+        _ => (addr_str, 3478),
+    };
+
+    // Resolve hostname.
+    let target = tokio::net::lookup_host(format!("{host}:{port}"))
+        .await
+        .ok()?
+        .next()?;
+
+    // Build STUN Binding Request (20 bytes):
+    //   Type: 0x0001 (Binding Request)
+    //   Length: 0x0000 (no attributes)
+    //   Magic cookie: 0x2112A442
+    //   Transaction ID: 12 random bytes
+    let mut request = [0u8; 20];
+    request[0] = 0x00;
+    request[1] = 0x01; // Binding Request
+    request[2] = 0x00;
+    request[3] = 0x00; // Message length = 0
+    request[4] = 0x21;
+    request[5] = 0x12;
+    request[6] = 0xA4;
+    request[7] = 0x42; // Magic cookie
+                       // Random transaction ID (bytes 8..20).
+    let tx_id: [u8; 12] = rand_u64()
+        .to_le_bytes()
+        .iter()
+        .chain(rand_u64().to_le_bytes().iter())
+        .take(12)
+        .copied()
+        .collect::<Vec<_>>()
+        .try_into()
+        .ok()?;
+    request[8..20].copy_from_slice(&tx_id);
+
+    // Send via UDP with a 3-second timeout.
+    let sock = tokio::net::UdpSocket::bind("0.0.0.0:0").await.ok()?;
+    sock.connect(target).await.ok()?;
+    sock.send(&request).await.ok()?;
+
+    let mut buf = vec![0u8; 1500];
+    let n = tokio::time::timeout(Duration::from_secs(3), sock.recv(&mut buf))
+        .await
+        .ok()?
+        .ok()?;
+
+    if n < 20 {
+        return None;
+    }
+
+    // Verify magic cookie and transaction ID.
+    if buf[4..8] != [0x21, 0x12, 0xA4, 0x42] {
+        return None;
+    }
+    if buf[8..20] != tx_id {
+        return None;
+    }
+
+    // Parse attributes for XOR-MAPPED-ADDRESS (0x0020) or MAPPED-ADDRESS (0x0001).
+    let msg_len = u16::from_be_bytes([buf[2], buf[3]]) as usize;
+    let body = &buf[20..20 + msg_len.min(n - 20)];
+
+    let mut offset = 0;
+    while offset + 4 <= body.len() {
+        let attr_type = u16::from_be_bytes([body[offset], body[offset + 1]]);
+        let attr_len = u16::from_be_bytes([body[offset + 2], body[offset + 3]]) as usize;
+        let attr_val = &body[offset + 4..offset + 4 + attr_len];
+
+        match attr_type {
+            0x0020 => {
+                // XOR-MAPPED-ADDRESS
+                if let Some(ip) = parse_xor_mapped_address(attr_val, &tx_id) {
+                    // We can't fully classify NAT type from a single STUN response,
+                    // but we can make a reasonable guess.
+                    let nat = if ip.contains(':') {
+                        "cone (IPv6)".to_string()
+                    } else {
+                        "cone (symmetric?)".to_string()
+                    };
+                    return Some((ip, nat));
+                }
+            }
+            0x0001 => {
+                // MAPPED-ADDRESS (legacy, no XOR)
+                if let Some(ip) = parse_mapped_address(attr_val) {
+                    return Some((ip, "cone".to_string()));
+                }
+            }
+            _ => {}
+        }
+        // Attributes are padded to 4-byte boundaries.
+        offset += 4 + attr_len + (4 - attr_len % 4) % 4;
+    }
+
+    None
+}
+
+/// Parse XOR-MAPPED-ADDRESS attribute value (RFC 5389 §15.2).
+fn parse_xor_mapped_address(val: &[u8], tx_id: &[u8; 12]) -> Option<String> {
+    if val.len() < 8 {
+        return None;
+    }
+    let family = val[1];
+    let xor_port = u16::from_be_bytes([val[2], val[3]]) ^ 0x2112; // XOR with top 16 bits of magic cookie
+    match family {
+        0x01 => {
+            // IPv4: XOR the address with the full magic cookie.
+            if val.len() < 8 {
+                return None;
+            }
+            let mut addr = [0u8; 4];
+            for i in 0..4 {
+                addr[i] = val[4 + i] ^ [0x21, 0x12, 0xA4, 0x42][i];
+            }
+            Some(format!(
+                "{}.{}.{}.{}:{}",
+                addr[0], addr[1], addr[2], addr[3], xor_port
+            ))
+        }
+        0x02 => {
+            // IPv6: XOR with magic cookie + transaction ID (16 bytes).
+            if val.len() < 20 {
+                return None;
+            }
+            let mut key = [0u8; 16];
+            key[0..4].copy_from_slice(&[0x21, 0x12, 0xA4, 0x42]);
+            key[4..16].copy_from_slice(tx_id);
+            let mut addr = [0u8; 16];
+            for i in 0..16 {
+                addr[i] = val[4 + i] ^ key[i];
+            }
+            let seg: Vec<String> = (0..8)
+                .map(|i| format!("{:x}", u16::from_be_bytes([addr[i * 2], addr[i * 2 + 1]])))
+                .collect();
+            Some(format!("[{}]:{}", seg.join(":"), xor_port))
+        }
+        _ => None,
+    }
+}
+
+/// Parse MAPPED-ADDRESS attribute value (legacy RFC 3489).
+fn parse_mapped_address(val: &[u8]) -> Option<String> {
+    if val.len() < 8 {
+        return None;
+    }
+    let family = val[1];
+    let port = u16::from_be_bytes([val[2], val[3]]);
+    if family == 0x01 && val.len() >= 8 {
+        Some(format!(
+            "{}.{}.{}.{}:{}",
+            val[4], val[5], val[6], val[7], port
+        ))
+    } else {
+        None
+    }
+}
+
+/// HTTP fallback: query a public IP lookup API.
+async fn http_ip_lookup() -> Option<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .ok()?;
+
+    // Try multiple services for redundancy.
+    for url in [
+        "https://api.ipify.org",
+        "https://ifconfig.me/ip",
+        "https://icanhazip.com",
+    ] {
+        if let Ok(resp) = client
+            .get(url)
+            .header("User-Agent", "synapse/0.1")
+            .send()
+            .await
+        {
+            if let Ok(text) = resp.text().await {
+                let ip = text.trim().to_string();
+                if !ip.is_empty() && ip.len() < 64 {
+                    return Some(ip);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Update a peer's state inside the shared mesh and broadcast the change.

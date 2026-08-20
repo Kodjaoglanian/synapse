@@ -8,6 +8,7 @@ use ratatui::Frame;
 
 use super::theme as t;
 use crate::app::App;
+use crate::i18n;
 use crate::network::{fmt_bytes, fmt_rate};
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
@@ -62,27 +63,28 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let ip = app
         .public_ip
         .clone()
-        .unwrap_or_else(|| "discovering…".into());
+        .unwrap_or_else(|| i18n::t().discovering_ip.into());
     let nat = app.nat_type.clone();
     let mode = app.mode.clone();
     let peers = snap.peers.len();
+    let tx = i18n::t();
 
     let row1 = Line::from(stat_spans(&[
-        ("PUBLIC IP", &ip),
-        ("NAT", &nat),
-        ("MODE", &mode),
+        (tx.label_public_ip, &ip),
+        (tx.label_nat, &nat),
+        (tx.label_mode, &mode),
     ]));
     let row2 = Line::from(stat_spans(&[
-        ("↑ UP", &up),
-        ("↓ DOWN", &down),
-        ("RTT", &rtt),
+        (tx.label_up, &up),
+        (tx.label_down, &down),
+        (tx.label_rtt, &rtt),
     ]));
     let row3 = Line::from(stat_spans(&[
-        ("PEERS", &format!("{peers}")),
-        ("PKTS", &format!("{pkts}")),
-        ("LOST", &format!("{lost}")),
+        (tx.label_peers, &format!("{peers}")),
+        (tx.label_pkts, &format!("{pkts}")),
+        (tx.label_lost, &format!("{lost}")),
         (
-            "TOTAL",
+            tx.label_total,
             &format!(
                 "↑{} ↓{}",
                 fmt_bytes(snap.total_up),
