@@ -39,9 +39,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(8),   // header
-            Constraint::Min(12),     // middle (graph + tunnels)
-            Constraint::Length(10),  // bottom (sparklines + log)
+            Constraint::Length(8),  // header
+            Constraint::Min(12),    // middle (graph + tunnels)
+            Constraint::Length(10), // bottom (sparklines + log)
         ])
         .split(area);
 
@@ -141,9 +141,18 @@ fn draw_help(f: &mut Frame, _app: &App) {
         ratatui::text::Line::raw(""),
         ratatui::text::Line::styled("Press Esc/Enter to close", t::dim_style()),
     ];
-    let p = ratatui::widgets::Paragraph::new(lines)
-        .style(ratatui::style::Style::default().bg(t::palette::BG).fg(t::palette::FG));
-    f.render_widget(p, area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 1 }));
+    let p = ratatui::widgets::Paragraph::new(lines).style(
+        ratatui::style::Style::default()
+            .bg(t::palette::BG)
+            .fg(t::palette::FG),
+    );
+    f.render_widget(
+        p,
+        area.inner(&ratatui::layout::Margin {
+            vertical: 1,
+            horizontal: 1,
+        }),
+    );
 }
 
 fn draw_peer_detail(f: &mut Frame, app: &App, pid: crate::network::PeerId) {
@@ -173,7 +182,10 @@ fn draw_peer_detail(f: &mut Frame, app: &App, pid: crate::network::PeerId) {
             ]),
             ratatui::text::Line::from(vec![
                 ratatui::text::Span::styled("  link      ", t::header_label_style()),
-                ratatui::text::Span::styled(format!("{:?} (rtt {} ms)", p.link, p.rtt_ms), link_style(p.link)),
+                ratatui::text::Span::styled(
+                    format!("{:?} (rtt {} ms)", p.link, p.rtt_ms),
+                    link_style(p.link),
+                ),
             ]),
             ratatui::text::Line::from(vec![
                 ratatui::text::Span::styled("  public ip ", t::header_label_style()),
@@ -185,17 +197,33 @@ fn draw_peer_detail(f: &mut Frame, app: &App, pid: crate::network::PeerId) {
             ]),
             ratatui::text::Line::from(vec![
                 ratatui::text::Span::styled("  bytes     ", t::header_label_style()),
-                ratatui::text::Span::raw(format!("↑ {}  ↓ {}", crate::network::fmt_bytes(p.bytes_sent), crate::network::fmt_bytes(p.bytes_recv))),
+                ratatui::text::Span::raw(format!(
+                    "↑ {}  ↓ {}",
+                    crate::network::fmt_bytes(p.bytes_sent),
+                    crate::network::fmt_bytes(p.bytes_recv)
+                )),
             ]),
             ratatui::text::Line::raw(""),
             ratatui::text::Line::styled("  Esc/Enter to close", t::dim_style()),
         ]
     } else {
-        vec![ratatui::text::Line::styled("peer not found", t::status_err_style())]
+        vec![ratatui::text::Line::styled(
+            "peer not found",
+            t::status_err_style(),
+        )]
     };
-    let para = ratatui::widgets::Paragraph::new(lines)
-        .style(ratatui::style::Style::default().bg(t::palette::BG).fg(t::palette::FG));
-    f.render_widget(para, area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 1 }));
+    let para = ratatui::widgets::Paragraph::new(lines).style(
+        ratatui::style::Style::default()
+            .bg(t::palette::BG)
+            .fg(t::palette::FG),
+    );
+    f.render_widget(
+        para,
+        area.inner(&ratatui::layout::Margin {
+            vertical: 1,
+            horizontal: 1,
+        }),
+    );
 }
 
 fn draw_quick_connect(f: &mut Frame, _app: &App, form: &crate::app::QuickConnectForm) {
@@ -209,7 +237,10 @@ fn draw_quick_connect(f: &mut Frame, _app: &App, form: &crate::app::QuickConnect
         .title(t::panel_title("⇄", "Quick Connect — paste SDP"));
     f.render_widget(block, area);
 
-    let inner = area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 2 });
+    let inner = area.inner(&ratatui::layout::Margin {
+        vertical: 1,
+        horizontal: 2,
+    });
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -223,30 +254,59 @@ fn draw_quick_connect(f: &mut Frame, _app: &App, form: &crate::app::QuickConnect
 
     let field_style = |active: bool| {
         if active {
-            ratatui::style::Style::default().fg(t::palette::BLUE).add_modifier(ratatui::style::Modifier::BOLD)
+            ratatui::style::Style::default()
+                .fg(t::palette::BLUE)
+                .add_modifier(ratatui::style::Modifier::BOLD)
         } else {
             ratatui::style::Style::default().fg(t::palette::FG)
         }
     };
 
     // Label field.
-    let label_block = Block::default().borders(Borders::ALL).border_style(field_style(matches!(form.field, FormField::Label))).title("Peer label");
-    let label_text = render_text_field(&form.label, form.cursor, matches!(form.field, FormField::Label));
-    f.render_widget(ratatui::widgets::Paragraph::new(label_text).block(label_block), chunks[0]);
+    let label_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(matches!(form.field, FormField::Label)))
+        .title("Peer label");
+    let label_text = render_text_field(
+        &form.label,
+        form.cursor,
+        matches!(form.field, FormField::Label),
+    );
+    f.render_widget(
+        ratatui::widgets::Paragraph::new(label_text).block(label_block),
+        chunks[0],
+    );
 
     // is_offer toggle.
-    let off = format!("Type: [{}] offer  [{}] answer", if form.is_offer { "x" } else { " " }, if !form.is_offer { "x" } else { " " });
-    let off_block = Block::default().borders(Borders::ALL).border_style(field_style(matches!(form.field, FormField::IsOffer))).title("SDP type (y=offer, n=answer)");
+    let off = format!(
+        "Type: [{}] offer  [{}] answer",
+        if form.is_offer { "x" } else { " " },
+        if !form.is_offer { "x" } else { " " }
+    );
+    let off_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(matches!(form.field, FormField::IsOffer)))
+        .title("SDP type (y=offer, n=answer)");
     f.render_widget(
-        ratatui::widgets::Paragraph::new(ratatui::text::Line::from(vec![ratatui::text::Span::styled(off, field_style(matches!(form.field, FormField::IsOffer)))]))
-            .block(off_block),
+        ratatui::widgets::Paragraph::new(ratatui::text::Line::from(vec![
+            ratatui::text::Span::styled(off, field_style(matches!(form.field, FormField::IsOffer))),
+        ]))
+        .block(off_block),
         chunks[1],
     );
 
     // SDP textarea.
-    let sdp_block = Block::default().borders(Borders::ALL).border_style(field_style(matches!(form.field, FormField::Sdp))).title("SDP (JSON)");
+    let sdp_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(matches!(form.field, FormField::Sdp)))
+        .title("SDP (JSON)");
     let sdp_text = render_text_field(&form.sdp, form.cursor, matches!(form.field, FormField::Sdp));
-    f.render_widget(ratatui::widgets::Paragraph::new(sdp_text).wrap(ratatui::widgets::Wrap { trim: false }).block(sdp_block), chunks[2]);
+    f.render_widget(
+        ratatui::widgets::Paragraph::new(sdp_text)
+            .wrap(ratatui::widgets::Wrap { trim: false })
+            .block(sdp_block),
+        chunks[2],
+    );
 
     // Buttons.
     let btns = ratatui::text::Line::from(vec![
@@ -262,7 +322,13 @@ fn draw_quick_connect(f: &mut Frame, _app: &App, form: &crate::app::QuickConnect
     ]);
     f.render_widget(btns, chunks[3]);
 
-    f.render_widget(ratatui::text::Line::styled("Tab to move • Enter to submit • Esc to cancel", t::dim_style()), chunks[4]);
+    f.render_widget(
+        ratatui::text::Line::styled(
+            "Tab to move • Enter to submit • Esc to cancel",
+            t::dim_style(),
+        ),
+        chunks[4],
+    );
 }
 
 fn draw_signaling_room(f: &mut Frame, _app: &App, form: &crate::app::SignalingRoomForm) {
@@ -276,7 +342,10 @@ fn draw_signaling_room(f: &mut Frame, _app: &App, form: &crate::app::SignalingRo
         .title(t::panel_title("⇄", "Connect via signaling server"));
     f.render_widget(block, area);
 
-    let inner = area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 2 });
+    let inner = area.inner(&ratatui::layout::Margin {
+        vertical: 1,
+        horizontal: 2,
+    });
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -290,57 +359,117 @@ fn draw_signaling_room(f: &mut Frame, _app: &App, form: &crate::app::SignalingRo
 
     let field_style = |active: bool| {
         if active {
-            ratatui::style::Style::default().fg(t::palette::BLUE).add_modifier(ratatui::style::Modifier::BOLD)
+            ratatui::style::Style::default()
+                .fg(t::palette::BLUE)
+                .add_modifier(ratatui::style::Modifier::BOLD)
         } else {
             ratatui::style::Style::default().fg(t::palette::FG)
         }
     };
 
     // Label.
-    let label_block = Block::default().borders(Borders::ALL).border_style(field_style(matches!(form.field, SignalingField::Label))).title("Peer label");
-    let label_text = render_text_field(&form.label, form.cursor, matches!(form.field, SignalingField::Label));
-    f.render_widget(ratatui::widgets::Paragraph::new(label_text).block(label_block), chunks[0]);
+    let label_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(matches!(form.field, SignalingField::Label)))
+        .title("Peer label");
+    let label_text = render_text_field(
+        &form.label,
+        form.cursor,
+        matches!(form.field, SignalingField::Label),
+    );
+    f.render_widget(
+        ratatui::widgets::Paragraph::new(label_text).block(label_block),
+        chunks[0],
+    );
 
     // Room.
-    let room_block = Block::default().borders(Borders::ALL).border_style(field_style(matches!(form.field, SignalingField::Room))).title("Room name (shared with the other peer)");
-    let room_text = render_text_field(&form.room, form.cursor, matches!(form.field, SignalingField::Room));
-    f.render_widget(ratatui::widgets::Paragraph::new(room_text).block(room_block), chunks[1]);
+    let room_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(matches!(form.field, SignalingField::Room)))
+        .title("Room name (shared with the other peer)");
+    let room_text = render_text_field(
+        &form.room,
+        form.cursor,
+        matches!(form.field, SignalingField::Room),
+    );
+    f.render_widget(
+        ratatui::widgets::Paragraph::new(room_text).block(room_block),
+        chunks[1],
+    );
 
     // Mode toggle.
     let mode = format!(
         "Mode: [{}] dial (offer)  [{}] answer",
-        if form.mode == SignalingMode::Dial { "x" } else { " " },
-        if form.mode == SignalingMode::Answer { "x" } else { " " },
+        if form.mode == SignalingMode::Dial {
+            "x"
+        } else {
+            " "
+        },
+        if form.mode == SignalingMode::Answer {
+            "x"
+        } else {
+            " "
+        },
     );
-    let mode_block = Block::default().borders(Borders::ALL).border_style(field_style(matches!(form.field, SignalingField::Mode))).title("Role (d=dial/offer, a=answer)");
+    let mode_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(matches!(form.field, SignalingField::Mode)))
+        .title("Role (d=dial/offer, a=answer)");
     f.render_widget(
-        ratatui::widgets::Paragraph::new(ratatui::text::Line::from(vec![ratatui::text::Span::styled(mode, field_style(matches!(form.field, SignalingField::Mode)))]))
-            .block(mode_block),
+        ratatui::widgets::Paragraph::new(ratatui::text::Line::from(vec![
+            ratatui::text::Span::styled(
+                mode,
+                field_style(matches!(form.field, SignalingField::Mode)),
+            ),
+        ]))
+        .block(mode_block),
         chunks[2],
     );
 
     // Buttons.
     let btns = ratatui::text::Line::from(vec![
-        ratatui::text::Span::styled(" [Submit] ", field_style(matches!(form.field, SignalingField::Submit))),
+        ratatui::text::Span::styled(
+            " [Submit] ",
+            field_style(matches!(form.field, SignalingField::Submit)),
+        ),
         ratatui::text::Span::raw("   "),
-        ratatui::text::Span::styled(" [Cancel] ", field_style(matches!(form.field, SignalingField::Cancel))),
+        ratatui::text::Span::styled(
+            " [Cancel] ",
+            field_style(matches!(form.field, SignalingField::Cancel)),
+        ),
     ]);
     f.render_widget(btns, chunks[3]);
 
-    f.render_widget(ratatui::text::Line::styled("Tab to move • Enter to submit • Esc to cancel • needs --signaling", t::dim_style()), chunks[4]);
+    f.render_widget(
+        ratatui::text::Line::styled(
+            "Tab to move • Enter to submit • Esc to cancel • needs --signaling",
+            t::dim_style(),
+        ),
+        chunks[4],
+    );
 }
 
 fn render_text_field(text: &str, cursor: usize, active: bool) -> ratatui::text::Text<'static> {
     let mut spans: Vec<ratatui::text::Span> = Vec::new();
     let cursor = cursor.min(text.len());
     let before = text[..cursor].to_string();
-    let ch = if cursor < text.len() { text[cursor..cursor + 1].to_string() } else { " ".to_string() };
-    let after = if cursor + 1 <= text.len() { text[cursor + 1..].to_string() } else { String::new() };
+    let ch = if cursor < text.len() {
+        text[cursor..cursor + 1].to_string()
+    } else {
+        " ".to_string()
+    };
+    let after = if cursor + 1 <= text.len() {
+        text[cursor + 1..].to_string()
+    } else {
+        String::new()
+    };
     spans.push(ratatui::text::Span::raw(before));
     if active {
         spans.push(ratatui::text::Span::styled(
             ch,
-            ratatui::style::Style::default().bg(t::palette::BLUE).fg(t::palette::BG),
+            ratatui::style::Style::default()
+                .bg(t::palette::BLUE)
+                .fg(t::palette::BG),
         ));
     } else {
         spans.push(ratatui::text::Span::raw(ch));

@@ -6,9 +6,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Sparkline};
 use ratatui::Frame;
 
+use super::theme as t;
 use crate::app::{App, Focus};
 use crate::network::LogLevel;
-use super::theme as t;
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
@@ -18,7 +18,10 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         .title(t::panel_title("≋", "Throughput & Events"));
     f.render_widget(block, area);
 
-    let inner = area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 1 });
+    let inner = area.inner(&ratatui::layout::Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(34), Constraint::Min(0)])
@@ -47,7 +50,10 @@ fn draw_sparklines(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(
         Line::from(vec![
             Span::styled("↑ UP  ", t::status_ok_style()),
-            Span::styled(crate::network::fmt_rate(snap.up_rate_bps), t::header_value_style()),
+            Span::styled(
+                crate::network::fmt_rate(snap.up_rate_bps),
+                t::header_value_style(),
+            ),
         ]),
         chunks[0],
     );
@@ -64,7 +70,10 @@ fn draw_sparklines(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(
         Line::from(vec![
             Span::styled("↓ DOWN ", t::status_warn_style()),
-            Span::styled(crate::network::fmt_rate(snap.down_rate_bps), t::header_value_style()),
+            Span::styled(
+                crate::network::fmt_rate(snap.down_rate_bps),
+                t::header_value_style(),
+            ),
         ]),
         chunks[2],
     );
@@ -95,11 +104,18 @@ fn draw_log(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
-        .border_style(if active { t::panel_border_active_style() } else { t::panel_border_style() })
+        .border_style(if active {
+            t::panel_border_active_style()
+        } else {
+            t::panel_border_style()
+        })
         .title(t::panel_title("≡", "Event Stream"));
     f.render_widget(block, area);
 
-    let inner = area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 1 });
+    let inner = area.inner(&ratatui::layout::Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
     // Show the most recent entries (bottom of buffer = newest).
     let items: Vec<ListItem> = app
         .log

@@ -25,7 +25,10 @@ pub enum AppEvent {
 }
 
 /// Spawn the unified event producer. Returns a receiver the main loop awaits.
-pub fn spawn() -> (mpsc::UnboundedSender<AppEvent>, mpsc::UnboundedReceiver<AppEvent>) {
+pub fn spawn() -> (
+    mpsc::UnboundedSender<AppEvent>,
+    mpsc::UnboundedReceiver<AppEvent>,
+) {
     let (tx, rx) = mpsc::unbounded_channel::<AppEvent>();
 
     // Keyboard + tick stream.
@@ -71,7 +74,9 @@ pub async fn run(mut app: crate::app::App) -> Result<()> {
         loop {
             match net_rx.recv().await {
                 Ok(_) => {
-                    if tx_net.send(AppEvent::Network).is_err() { break; }
+                    if tx_net.send(AppEvent::Network).is_err() {
+                        break;
+                    }
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => break,

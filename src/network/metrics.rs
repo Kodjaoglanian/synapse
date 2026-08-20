@@ -74,7 +74,12 @@ pub enum MetricsCmd {
     /// Update RTT for a peer.
     Rtt { peer: PeerId, rtt_ms: u32 },
     /// Update packet counters for a peer.
-    Packets { peer: PeerId, sent: u64, recv: u64, lost: u64 },
+    Packets {
+        peer: PeerId,
+        sent: u64,
+        recv: u64,
+        lost: u64,
+    },
     /// Mark a peer as relayed (or not).
     Link { peer: PeerId, relayed: bool },
 }
@@ -183,7 +188,10 @@ pub fn spawn_collector(mesh: SharedMesh) -> MetricsHandle {
         }
     });
 
-    MetricsHandle { cmd_tx, snapshot_rx }
+    MetricsHandle {
+        cmd_tx,
+        snapshot_rx,
+    }
 }
 
 fn handle_cmd(cmd: MetricsCmd, acc: &mut HashMap<PeerId, Acc>) {
@@ -198,7 +206,12 @@ fn handle_cmd(cmd: MetricsCmd, acc: &mut HashMap<PeerId, Acc>) {
             let a = acc.entry(peer).or_default();
             a.rtt_ms = rtt_ms;
         }
-        MetricsCmd::Packets { peer, sent, recv, lost } => {
+        MetricsCmd::Packets {
+            peer,
+            sent,
+            recv,
+            lost,
+        } => {
             let a = acc.entry(peer).or_default();
             a.packets_sent += sent;
             a.packets_recv += recv;
@@ -224,10 +237,15 @@ pub fn fmt_rate(bps: u64) -> String {
     const MB: f64 = KB * 1024.0;
     const GB: f64 = MB * 1024.0;
     let v = bps as f64;
-    if v >= GB { format!("{:.2} GB/s", v / GB) }
-    else if v >= MB { format!("{:.2} MB/s", v / MB) }
-    else if v >= KB { format!("{:.2} KB/s", v / KB) }
-    else { format!("{} B/s", bps) }
+    if v >= GB {
+        format!("{:.2} GB/s", v / GB)
+    } else if v >= MB {
+        format!("{:.2} MB/s", v / MB)
+    } else if v >= KB {
+        format!("{:.2} KB/s", v / KB)
+    } else {
+        format!("{} B/s", bps)
+    }
 }
 
 /// Human-readable byte total formatter.
@@ -236,8 +254,13 @@ pub fn fmt_bytes(b: u64) -> String {
     const MB: f64 = KB * 1024.0;
     const GB: f64 = MB * 1024.0;
     let v = b as f64;
-    if v >= GB { format!("{:.2} GB", v / GB) }
-    else if v >= MB { format!("{:.2} MB", v / MB) }
-    else if v >= KB { format!("{:.2} KB", v / KB) }
-    else { format!("{} B", b) }
+    if v >= GB {
+        format!("{:.2} GB", v / GB)
+    } else if v >= MB {
+        format!("{:.2} MB", v / MB)
+    } else if v >= KB {
+        format!("{:.2} KB", v / KB)
+    } else {
+        format!("{} B", b)
+    }
 }

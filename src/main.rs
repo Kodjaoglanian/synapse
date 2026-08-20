@@ -19,8 +19,10 @@ use std::process;
 
 use anyhow::Result;
 use clap::{Parser, ValueHint};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::execute;
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
@@ -81,7 +83,10 @@ fn main() -> Result<()> {
         .iter()
         .filter_map(|s| {
             let (label, token) = s.split_once(':')?;
-            Some(SeedPeer { label: label.to_string(), token: token.to_string() })
+            Some(SeedPeer {
+                label: label.to_string(),
+                token: token.to_string(),
+            })
         })
         .collect();
 
@@ -202,7 +207,9 @@ fn print_event(ev: &network::NetEvent) {
         NetEvent::TunnelRemoved(id) => println!("[TUN  ] removed {id}"),
         NetEvent::StreamOpened(s) => println!("[STRM ] open {} on tunnel {}", s.id, s.tunnel_id),
         NetEvent::StreamClosed(id) => println!("[STRM ] closed {id}"),
-        NetEvent::SdpReady { peer, sdp } => println!("[SDP  ] ready for {peer} ({} bytes)", sdp.len()),
+        NetEvent::SdpReady { peer, sdp } => {
+            println!("[SDP  ] ready for {peer} ({} bytes)", sdp.len())
+        }
         _ => {}
     }
 }

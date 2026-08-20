@@ -15,20 +15,27 @@ use ratatui::widgets::{
 };
 use ratatui::Frame;
 
+use super::theme as t;
 use crate::app::{App, Focus};
 use crate::network::{LinkKind, PeerId, PeerStatus};
-use super::theme as t;
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let active = app.focus == Focus::Graph;
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
-        .border_style(if active { t::panel_border_active_style() } else { t::panel_border_style() })
+        .border_style(if active {
+            t::panel_border_active_style()
+        } else {
+            t::panel_border_style()
+        })
         .title(t::panel_title("⬡", "Mesh Graph"));
     f.render_widget(block, area);
 
-    let inner = area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 1 });
+    let inner = area.inner(&ratatui::layout::Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
     // Reserve a one-line legend at the bottom.
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -46,7 +53,8 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
 
     let mut positions: HashMap<PeerId, (f64, f64)> = HashMap::new();
     for (i, pid) in peer_ids.iter().enumerate() {
-        let angle = (i as f64) * (std::f64::consts::TAU / n.max(1) as f64) - std::f64::consts::FRAC_PI_2;
+        let angle =
+            (i as f64) * (std::f64::consts::TAU / n.max(1) as f64) - std::f64::consts::FRAC_PI_2;
         positions.insert(*pid, (cx + radius * angle.cos(), cy + radius * angle.sin()));
     }
 
@@ -102,7 +110,10 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
                 let color = peer
                     .map(|p| status_color(p.status))
                     .unwrap_or(t::palette::FG_DIM);
-                ctx.draw(&Points { coords: &[(*px, *py)], color });
+                ctx.draw(&Points {
+                    coords: &[(*px, *py)],
+                    color,
+                });
                 // halo for connected peers.
                 if let Some(p) = peer {
                     if p.status == PeerStatus::Connected {
@@ -122,7 +133,10 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
 
             // Draw the local centre node (larger, pulsing).
             let pulse = 1.0 + (tick * 0.1).sin().abs() * 1.0;
-            ctx.draw(&Points { coords: &[(cx, cy)], color: t::palette::BLUE });
+            ctx.draw(&Points {
+                coords: &[(cx, cy)],
+                color: t::palette::BLUE,
+            });
             ctx.draw(&Points {
                 coords: &[
                     (cx + pulse, cy),

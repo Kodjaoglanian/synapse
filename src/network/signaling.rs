@@ -71,14 +71,23 @@ impl Signaling {
     /// Fetch the remote peer's offer for a room. Returns `None` if not posted yet.
     pub async fn get_offer(&self, room: &str) -> Result<Option<String>> {
         let url = format!("{}/offer/{}", self.base, room);
-        let resp = self.client.get(&url).send().await.with_context(|| format!("GET {url}"))?;
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .with_context(|| format!("GET {url}"))?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
         if !resp.status().is_success() {
             return Err(anyhow!("GET {url} -> {}", resp.status()));
         }
-        Ok(Some(resp.text().await.with_context(|| format!("read body {url}"))?))
+        Ok(Some(
+            resp.text()
+                .await
+                .with_context(|| format!("read body {url}"))?,
+        ))
     }
 
     /// Publish our answer for a room.
@@ -101,14 +110,23 @@ impl Signaling {
     /// Fetch the remote peer's answer for a room. Returns `None` if not posted yet.
     pub async fn get_answer(&self, room: &str) -> Result<Option<String>> {
         let url = format!("{}/answer/{}", self.base, room);
-        let resp = self.client.get(&url).send().await.with_context(|| format!("GET {url}"))?;
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .with_context(|| format!("GET {url}"))?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
         if !resp.status().is_success() {
             return Err(anyhow!("GET {url} -> {}", resp.status()));
         }
-        Ok(Some(resp.text().await.with_context(|| format!("read body {url}"))?))
+        Ok(Some(
+            resp.text()
+                .await
+                .with_context(|| format!("read body {url}"))?,
+        ))
     }
 
     /// Post one of our ICE candidates. The server is expected to append.
@@ -132,14 +150,22 @@ impl Signaling {
     /// Fetch the remote peer's ICE candidates (newline-delimited JSON).
     pub async fn get_ice(&self, room: &str, side: char) -> Result<Vec<IceCandidate>> {
         let url = format!("{}/ice/{}/{}", self.base, room, side);
-        let resp = self.client.get(&url).send().await.with_context(|| format!("GET {url}"))?;
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .with_context(|| format!("GET {url}"))?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(Vec::new());
         }
         if !resp.status().is_success() {
             return Err(anyhow!("GET {url} -> {}", resp.status()));
         }
-        let text = resp.text().await.with_context(|| format!("read body {url}"))?;
+        let text = resp
+            .text()
+            .await
+            .with_context(|| format!("read body {url}"))?;
         let mut out = Vec::new();
         for line in text.lines() {
             let line = line.trim();

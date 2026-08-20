@@ -51,9 +51,15 @@ pub enum EngineCmd {
     /// Answer an incoming signaling offer for a room ("side b").
     AnswerSignaling { label: String, room: String },
     /// Feed a remote SDP answer/offer for a known peer.
-    RemoteSdp { peer: PeerId, sdp: RTCSessionDescription },
+    RemoteSdp {
+        peer: PeerId,
+        sdp: RTCSessionDescription,
+    },
     /// Feed a remote ICE candidate (trickle ICE).
-    RemoteIce { peer: PeerId, candidate: RTCIceCandidateInit },
+    RemoteIce {
+        peer: PeerId,
+        candidate: RTCIceCandidateInit,
+    },
     /// Open a local tunnel mapped to a peer's remote endpoint.
     OpenTunnel(Tunnel),
     /// Close a tunnel and its data channel.
@@ -61,7 +67,11 @@ pub enum EngineCmd {
     /// Close a peer connection.
     ClosePeer(PeerId),
     /// Paste a full SDP blob received out-of-band (quick-connect modal).
-    QuickConnect { label: String, sdp: String, is_offer: bool },
+    QuickConnect {
+        label: String,
+        sdp: String,
+        is_offer: bool,
+    },
     /// Shut the engine down.
     Shutdown,
 }
@@ -118,7 +128,12 @@ pub async fn spawn(
     let next_tunnel_id: Arc<Mutex<u32>> = Arc::new(Mutex::new(1));
 
     // Best-effort public IP / NAT discovery via the first STUN server.
-    spawn_nat_discovery(config.stun_servers.clone(), public_ip_tx, nat_type_tx, events.clone());
+    spawn_nat_discovery(
+        config.stun_servers.clone(),
+        public_ip_tx,
+        nat_type_tx,
+        events.clone(),
+    );
 
     // Optional HTTP signaling server, shared by all signaling-driven dials.
     let signaling = config.signaling.clone();
@@ -140,7 +155,9 @@ pub async fn spawn(
         for t in seed_tunnels {
             let _ = cmd_tx_clone.send(EngineCmd::OpenTunnel(Tunnel {
                 id: 0, // assigned by engine
-                local_addr: format!("127.0.0.1:{}", t.local_port).parse().unwrap_or_else(|_| "127.0.0.1:0".parse().unwrap()),
+                local_addr: format!("127.0.0.1:{}", t.local_port)
+                    .parse()
+                    .unwrap_or_else(|_| "127.0.0.1:0".parse().unwrap()),
                 peer: 0, // resolved by label later
                 remote_host: t.remote_host,
                 remote_port: t.remote_port,
@@ -180,15 +197,9 @@ pub async fn spawn(
                     }
                 }
                 EngineCmd::OpenTunnel(t) => {
-                    if let Err(e) = handle_open_tunnel(
-                        &mesh,
-                        &events,
-                        &metrics,
-                        &peers,
-                        &next_tunnel_id,
-                        t,
-                    )
-                    .await
+                    if let Err(e) =
+                        handle_open_tunnel(&mesh, &events, &metrics, &peers, &next_tunnel_id, t)
+                            .await
                     {
                         emit_log(&events, LogLevel::Error, format!("open tunnel: {e:#}"));
                     }
@@ -203,7 +214,11 @@ pub async fn spawn(
                         emit_log(&events, LogLevel::Error, format!("close peer: {e:#}"));
                     }
                 }
-                EngineCmd::QuickConnect { label, sdp, is_offer } => {
+                EngineCmd::QuickConnect {
+                    label,
+                    sdp,
+                    is_offer,
+                } => {
                     if let Err(e) = handle_quick_connect(
                         &api,
                         &ice_servers,
@@ -233,16 +248,32 @@ pub async fn spawn(
                         let ice_servers = ice_servers.clone();
                         tokio::spawn(async move {
                             if let Err(e) = signaling_dial(
-                                &api, &ice_servers, &mesh, &events, &metrics,
-                                &peers, &next_peer_id, sig, label, room,
+                                &api,
+                                &ice_servers,
+                                &mesh,
+                                &events,
+                                &metrics,
+                                &peers,
+                                &next_peer_id,
+                                sig,
+                                label,
+                                room,
                             )
                             .await
                             {
-                                emit_log(&events, LogLevel::Error, format!("signaling dial: {e:#}"));
+                                emit_log(
+                                    &events,
+                                    LogLevel::Error,
+                                    format!("signaling dial: {e:#}"),
+                                );
                             }
                         });
                     } else {
-                        emit_log(&events, LogLevel::Error, "signaling dial: no --signaling URL configured");
+                        emit_log(
+                            &events,
+                            LogLevel::Error,
+                            "signaling dial: no --signaling URL configured",
+                        );
                     }
                 }
                 EngineCmd::AnswerSignaling { label, room } => {
@@ -257,16 +288,32 @@ pub async fn spawn(
                         let ice_servers = ice_servers.clone();
                         tokio::spawn(async move {
                             if let Err(e) = signaling_answer(
-                                &api, &ice_servers, &mesh, &events, &metrics,
-                                &peers, &next_peer_id, sig, label, room,
+                                &api,
+                                &ice_servers,
+                                &mesh,
+                                &events,
+                                &metrics,
+                                &peers,
+                                &next_peer_id,
+                                sig,
+                                label,
+                                room,
                             )
                             .await
                             {
-                                emit_log(&events, LogLevel::Error, format!("signaling answer: {e:#}"));
+                                emit_log(
+                                    &events,
+                                    LogLevel::Error,
+                                    format!("signaling answer: {e:#}"),
+                                );
                             }
                         });
                     } else {
-                        emit_log(&events, LogLevel::Error, "signaling answer: no --signaling URL configured");
+                        emit_log(
+                            &events,
+                            LogLevel::Error,
+                            "signaling answer: no --signaling URL configured",
+                        );
                     }
                 }
             }
@@ -416,7 +463,11 @@ async fn create_pc_with_ice_hook(
         Box::pin(async move {
             if let Some(c) = c {
                 let txt = c.to_json().unwrap_or_default().candidate;
-                emit_log(&events_ice_cand, LogLevel::Handshake, format!("local ICE: {txt}"));
+                emit_log(
+                    &events_ice_cand,
+                    LogLevel::Handshake,
+                    format!("local ICE: {txt}"),
+                );
                 if let Some(h) = hook.as_ref() {
                     h(c);
                 }
@@ -503,10 +554,13 @@ async fn wire_data_channel(
                             p.link = LinkKind::classify(rtt_ms, p.relayed);
                         })
                         .await;
-                        let _ = metrics_ping.cmd_tx.send(crate::network::metrics::MetricsCmd::Rtt {
-                            peer: peer_id,
-                            rtt_ms,
-                        });
+                        let _ =
+                            metrics_ping
+                                .cmd_tx
+                                .send(crate::network::metrics::MetricsCmd::Rtt {
+                                    peer: peer_id,
+                                    rtt_ms,
+                                });
                     }
                 }
             })
@@ -542,7 +596,11 @@ async fn wire_data_channel(
                 move || {
                     let events_t = events_t.clone();
                     Box::pin(async move {
-                        emit_log(&events_t, LogLevel::Handshake, format!("tunnel {tid} data channel open"));
+                        emit_log(
+                            &events_t,
+                            LogLevel::Handshake,
+                            format!("tunnel {tid} data channel open"),
+                        );
                     })
                 }
             }));
@@ -554,11 +612,13 @@ async fn wire_data_channel(
                 let events_t = events_msg.clone();
                 let n = msg.data.len() as u64;
                 Box::pin(async move {
-                    let _ = metrics_t.cmd_tx.send(crate::network::metrics::MetricsCmd::Bytes {
-                        peer: peer_id,
-                        sent: 0,
-                        recv: n,
-                    });
+                    let _ = metrics_t
+                        .cmd_tx
+                        .send(crate::network::metrics::MetricsCmd::Bytes {
+                            peer: peer_id,
+                            sent: 0,
+                            recv: n,
+                        });
                     let _ = events_t.send(NetEvent::StreamUpdated(StreamInfo {
                         id: sid,
                         tunnel_id: tid,
@@ -604,13 +664,33 @@ async fn handle_dial(
         *g += 1;
         id
     };
-    emit_log(events, LogLevel::Info, format!("dialing peer '{label}' (id={peer_id})"));
+    emit_log(
+        events,
+        LogLevel::Info,
+        format!("dialing peer '{label}' (id={peer_id})"),
+    );
 
-    let pc = create_pc(api, ice_servers, mesh.clone(), events.clone(), metrics.clone(), peer_id).await?;
+    let pc = create_pc(
+        api,
+        ice_servers,
+        mesh.clone(),
+        events.clone(),
+        metrics.clone(),
+        peer_id,
+    )
+    .await?;
 
     // Create the control data channel (dialer side).
     let ctrl = pc.create_data_channel("synapse-ctrl", None).await?;
-    wire_data_channel(&ctrl, "synapse-ctrl", peer_id, mesh.clone(), events.clone(), metrics.clone()).await;
+    wire_data_channel(
+        &ctrl,
+        "synapse-ctrl",
+        peer_id,
+        mesh.clone(),
+        events.clone(),
+        metrics.clone(),
+    )
+    .await;
 
     // Insert peer state.
     let state = PeerState {
@@ -634,14 +714,17 @@ async fn handle_dial(
 
     {
         let mut g = peers.lock().await;
-        g.insert(peer_id, PeerCtx {
-            id: peer_id,
-            label,
-            pc,
-            ctrl: Some(ctrl),
-            tunnels: HashMap::new(),
-            last_ping: None,
-        });
+        g.insert(
+            peer_id,
+            PeerCtx {
+                id: peer_id,
+                label,
+                pc,
+                ctrl: Some(ctrl),
+                tunnels: HashMap::new(),
+                last_ping: None,
+            },
+        );
     }
 
     // Spawn a ping loop for RTT measurement.
@@ -658,11 +741,16 @@ async fn handle_remote_sdp(
 ) -> Result<()> {
     let pc = {
         let g = peers.lock().await;
-        g.get(&peer_id).map(|c| Arc::clone(&c.pc))
+        g.get(&peer_id)
+            .map(|c| Arc::clone(&c.pc))
             .ok_or_else(|| anyhow!("unknown peer {peer_id}"))?
     };
     pc.set_remote_description(sdp).await?;
-    emit_log(events, LogLevel::Handshake, format!("peer {peer_id}: remote SDP set"));
+    emit_log(
+        events,
+        LogLevel::Handshake,
+        format!("peer {peer_id}: remote SDP set"),
+    );
     Ok(())
 }
 
@@ -675,11 +763,16 @@ async fn handle_remote_ice(
 ) -> Result<()> {
     let pc = {
         let g = peers.lock().await;
-        g.get(&peer_id).map(|c| Arc::clone(&c.pc))
+        g.get(&peer_id)
+            .map(|c| Arc::clone(&c.pc))
             .ok_or_else(|| anyhow!("unknown peer {peer_id}"))?
     };
     pc.add_ice_candidate(candidate).await?;
-    emit_log(events, LogLevel::Handshake, format!("peer {peer_id}: remote ICE added"));
+    emit_log(
+        events,
+        LogLevel::Handshake,
+        format!("peer {peer_id}: remote ICE added"),
+    );
     Ok(())
 }
 
@@ -705,7 +798,10 @@ async fn handle_open_tunnel(
     // Resolve peer id by label.
     let peer_id = {
         let g = mesh.lock().await;
-        g.peers.iter().find(|(_, p)| p.label == tunnel.peer_label()).map(|(k, _)| *k)
+        g.peers
+            .iter()
+            .find(|(_, p)| p.label == tunnel.peer_label())
+            .map(|(k, _)| *k)
     };
     if let Some(pid) = peer_id {
         tunnel.peer = pid;
@@ -715,7 +811,11 @@ async fn handle_open_tunnel(
         g.tunnels.insert(id, tunnel.clone());
     }
     let _ = events.send(NetEvent::TunnelAdded(tunnel.clone()));
-    emit_log(events, LogLevel::Info, format!("tunnel '{}' added on {}", tunnel.label, tunnel.local_addr));
+    emit_log(
+        events,
+        LogLevel::Info,
+        format!("tunnel '{}' added on {}", tunnel.label, tunnel.local_addr),
+    );
 
     // Spawn the local TCP proxy listener.
     let proxy_mesh = mesh.clone();
@@ -726,9 +826,19 @@ async fn handle_open_tunnel(
     let t = tunnel.clone();
     tokio::spawn(async move {
         if let Err(e) = crate::network::proxy::spawn_listener(
-            t, proxy_mesh, proxy_events, proxy_metrics, proxy_peers,
-        ).await {
-            emit_log(&events_err, LogLevel::Error, format!("proxy listener: {e:#}"));
+            t,
+            proxy_mesh,
+            proxy_events,
+            proxy_metrics,
+            proxy_peers,
+        )
+        .await
+        {
+            emit_log(
+                &events_err,
+                LogLevel::Error,
+                format!("proxy listener: {e:#}"),
+            );
         }
     });
     Ok(())
@@ -805,7 +915,15 @@ async fn handle_quick_connect(
         *g += 1;
         id
     };
-    let pc = create_pc(api, ice_servers, mesh.clone(), events.clone(), metrics.clone(), peer_id).await?;
+    let pc = create_pc(
+        api,
+        ice_servers,
+        mesh.clone(),
+        events.clone(),
+        metrics.clone(),
+        peer_id,
+    )
+    .await?;
 
     let state = PeerState {
         id: peer_id,
@@ -821,29 +939,45 @@ async fn handle_quick_connect(
     let _ = events.send(NetEvent::PeerAdded(state));
 
     if is_offer {
-        let desc: RTCSessionDescription = serde_json::from_str(&sdp).context("parse remote offer")?;
+        let desc: RTCSessionDescription =
+            serde_json::from_str(&sdp).context("parse remote offer")?;
         pc.set_remote_description(desc).await?;
         let answer = pc.create_answer(None).await?;
         pc.set_local_description(answer.clone()).await?;
         let ans = serde_json::to_string(&answer)?;
-        let _ = events.send(NetEvent::SdpReady { peer: peer_id, sdp: ans });
-        emit_log(events, LogLevel::Handshake, format!("quick-connect: answered peer {peer_id}"));
+        let _ = events.send(NetEvent::SdpReady {
+            peer: peer_id,
+            sdp: ans,
+        });
+        emit_log(
+            events,
+            LogLevel::Handshake,
+            format!("quick-connect: answered peer {peer_id}"),
+        );
     } else {
-        let desc: RTCSessionDescription = serde_json::from_str(&sdp).context("parse remote answer")?;
+        let desc: RTCSessionDescription =
+            serde_json::from_str(&sdp).context("parse remote answer")?;
         pc.set_remote_description(desc).await?;
-        emit_log(events, LogLevel::Handshake, format!("quick-connect: applied answer for peer {peer_id}"));
+        emit_log(
+            events,
+            LogLevel::Handshake,
+            format!("quick-connect: applied answer for peer {peer_id}"),
+        );
     }
 
     {
         let mut g = peers.lock().await;
-        g.insert(peer_id, PeerCtx {
-            id: peer_id,
-            label,
-            pc,
-            ctrl: None,
-            tunnels: HashMap::new(),
-            last_ping: None,
-        });
+        g.insert(
+            peer_id,
+            PeerCtx {
+                id: peer_id,
+                label,
+                pc,
+                ctrl: None,
+                tunnels: HashMap::new(),
+                last_ping: None,
+            },
+        );
     }
     spawn_ping_loop(peer_id, peers.clone(), events.clone(), metrics.clone());
     Ok(())
@@ -872,38 +1006,58 @@ async fn signaling_dial(
         *g += 1;
         id
     };
-    emit_log(events, LogLevel::Info, format!("signaling dial '{label}' room '{room}' (id={peer_id})"));
+    emit_log(
+        events,
+        LogLevel::Info,
+        format!("signaling dial '{label}' room '{room}' (id={peer_id})"),
+    );
 
     // ICE hook: post every local candidate to /ice/{room}/a.
     let sig_ice = sig.clone();
     let room_ice = room.clone();
     let events_ice = events.clone();
-    let ice_hook: IceHook = Arc::new(move |c: webrtc::ice_transport::ice_candidate::RTCIceCandidate| {
-        let sig = sig_ice.clone();
-        let room = room_ice.clone();
-        let events = events_ice.clone();
-        let init = c.to_json().unwrap_or_default();
-        tokio::spawn(async move {
-            let cand = IceCandidate {
-                candidate: init.candidate,
-                sdp_mid: init.sdp_mid,
-                sdp_mline_index: init.sdp_mline_index,
-                username_fragment: init.username_fragment,
-            };
-            if let Err(e) = sig.post_ice(&room, 'a', &cand).await {
-                emit_log(&events, LogLevel::Warn, format!("post ice: {e:#}"));
-            }
-        });
-    });
+    let ice_hook: IceHook = Arc::new(
+        move |c: webrtc::ice_transport::ice_candidate::RTCIceCandidate| {
+            let sig = sig_ice.clone();
+            let room = room_ice.clone();
+            let events = events_ice.clone();
+            let init = c.to_json().unwrap_or_default();
+            tokio::spawn(async move {
+                let cand = IceCandidate {
+                    candidate: init.candidate,
+                    sdp_mid: init.sdp_mid,
+                    sdp_mline_index: init.sdp_mline_index,
+                    username_fragment: init.username_fragment,
+                };
+                if let Err(e) = sig.post_ice(&room, 'a', &cand).await {
+                    emit_log(&events, LogLevel::Warn, format!("post ice: {e:#}"));
+                }
+            });
+        },
+    );
 
     let pc = create_pc_with_ice_hook(
-        api, ice_servers, mesh.clone(), events.clone(), metrics.clone(), peer_id, Some(ice_hook),
+        api,
+        ice_servers,
+        mesh.clone(),
+        events.clone(),
+        metrics.clone(),
+        peer_id,
+        Some(ice_hook),
     )
     .await?;
 
     // Control channel (dialer side).
     let ctrl = pc.create_data_channel("synapse-ctrl", None).await?;
-    wire_data_channel(&ctrl, "synapse-ctrl", peer_id, mesh.clone(), events.clone(), metrics.clone()).await;
+    wire_data_channel(
+        &ctrl,
+        "synapse-ctrl",
+        peer_id,
+        mesh.clone(),
+        events.clone(),
+        metrics.clone(),
+    )
+    .await;
 
     let state = PeerState {
         id: peer_id,
@@ -922,38 +1076,64 @@ async fn signaling_dial(
     let offer = pc.create_offer(None).await?;
     pc.set_local_description(offer.clone()).await?;
     let offer_json = serde_json::to_string(&offer)?;
-    sig.post_offer(&room, &offer_json).await
+    sig.post_offer(&room, &offer_json)
+        .await
         .context("post offer")?;
-    emit_log(events, LogLevel::Handshake, format!("room '{room}': offer posted"));
+    emit_log(
+        events,
+        LogLevel::Handshake,
+        format!("room '{room}': offer posted"),
+    );
 
     // Insert peer ctx.
     {
         let mut g = peers.lock().await;
-        g.insert(peer_id, PeerCtx {
-            id: peer_id,
-            label: label.clone(),
-            pc: Arc::clone(&pc),
-            ctrl: Some(ctrl),
-            tunnels: HashMap::new(),
-            last_ping: None,
-        });
+        g.insert(
+            peer_id,
+            PeerCtx {
+                id: peer_id,
+                label: label.clone(),
+                pc: Arc::clone(&pc),
+                ctrl: Some(ctrl),
+                tunnels: HashMap::new(),
+                last_ping: None,
+            },
+        );
     }
     spawn_ping_loop(peer_id, Arc::clone(peers), events.clone(), metrics.clone());
 
     // Poll for the remote answer.
-    let answer_json = poll_signal(|| {
-        let sig = sig.clone();
-        let room = room.clone();
-        async move { sig.get_answer(&room).await }
-    }, Duration::from_secs(2), Duration::from_secs(60), events).await?;
+    let answer_json = poll_signal(
+        || {
+            let sig = sig.clone();
+            let room = room.clone();
+            async move { sig.get_answer(&room).await }
+        },
+        Duration::from_secs(2),
+        Duration::from_secs(60),
+        events,
+    )
+    .await?;
 
-    let answer_json = answer_json.ok_or_else(|| anyhow!("timed out waiting for answer in room '{room}'"))?;
-    let answer: RTCSessionDescription = serde_json::from_str(&answer_json).context("parse answer")?;
+    let answer_json =
+        answer_json.ok_or_else(|| anyhow!("timed out waiting for answer in room '{room}'"))?;
+    let answer: RTCSessionDescription =
+        serde_json::from_str(&answer_json).context("parse answer")?;
     pc.set_remote_description(answer).await?;
-    emit_log(events, LogLevel::Handshake, format!("room '{room}': remote answer set"));
+    emit_log(
+        events,
+        LogLevel::Handshake,
+        format!("room '{room}': remote answer set"),
+    );
 
     // Drain remote ICE candidates (side b) and add them.
-    spawn_ice_drain(sig.clone(), room.clone(), 'b', Arc::clone(&pc), events.clone());
+    spawn_ice_drain(
+        sig.clone(),
+        room.clone(),
+        'b',
+        Arc::clone(&pc),
+        events.clone(),
+    );
     Ok(())
 }
 
@@ -979,32 +1159,44 @@ async fn signaling_answer(
         *g += 1;
         id
     };
-    emit_log(events, LogLevel::Info, format!("signaling answer '{label}' room '{room}' (id={peer_id})"));
+    emit_log(
+        events,
+        LogLevel::Info,
+        format!("signaling answer '{label}' room '{room}' (id={peer_id})"),
+    );
 
     // ICE hook: post every local candidate to /ice/{room}/b.
     let sig_ice = sig.clone();
     let room_ice = room.clone();
     let events_ice = events.clone();
-    let ice_hook: IceHook = Arc::new(move |c: webrtc::ice_transport::ice_candidate::RTCIceCandidate| {
-        let sig = sig_ice.clone();
-        let room = room_ice.clone();
-        let events = events_ice.clone();
-        let init = c.to_json().unwrap_or_default();
-        tokio::spawn(async move {
-            let cand = IceCandidate {
-                candidate: init.candidate,
-                sdp_mid: init.sdp_mid,
-                sdp_mline_index: init.sdp_mline_index,
-                username_fragment: init.username_fragment,
-            };
-            if let Err(e) = sig.post_ice(&room, 'b', &cand).await {
-                emit_log(&events, LogLevel::Warn, format!("post ice: {e:#}"));
-            }
-        });
-    });
+    let ice_hook: IceHook = Arc::new(
+        move |c: webrtc::ice_transport::ice_candidate::RTCIceCandidate| {
+            let sig = sig_ice.clone();
+            let room = room_ice.clone();
+            let events = events_ice.clone();
+            let init = c.to_json().unwrap_or_default();
+            tokio::spawn(async move {
+                let cand = IceCandidate {
+                    candidate: init.candidate,
+                    sdp_mid: init.sdp_mid,
+                    sdp_mline_index: init.sdp_mline_index,
+                    username_fragment: init.username_fragment,
+                };
+                if let Err(e) = sig.post_ice(&room, 'b', &cand).await {
+                    emit_log(&events, LogLevel::Warn, format!("post ice: {e:#}"));
+                }
+            });
+        },
+    );
 
     let pc = create_pc_with_ice_hook(
-        api, ice_servers, mesh.clone(), events.clone(), metrics.clone(), peer_id, Some(ice_hook),
+        api,
+        ice_servers,
+        mesh.clone(),
+        events.clone(),
+        metrics.clone(),
+        peer_id,
+        Some(ice_hook),
     )
     .await?;
 
@@ -1022,39 +1214,65 @@ async fn signaling_answer(
     let _ = events.send(NetEvent::PeerAdded(state));
 
     // Poll for the remote offer.
-    let offer_json = poll_signal(|| {
-        let sig = sig.clone();
-        let room = room.clone();
-        async move { sig.get_offer(&room).await }
-    }, Duration::from_secs(2), Duration::from_secs(60), events).await?;
+    let offer_json = poll_signal(
+        || {
+            let sig = sig.clone();
+            let room = room.clone();
+            async move { sig.get_offer(&room).await }
+        },
+        Duration::from_secs(2),
+        Duration::from_secs(60),
+        events,
+    )
+    .await?;
 
-    let offer_json = offer_json.ok_or_else(|| anyhow!("timed out waiting for offer in room '{room}'"))?;
+    let offer_json =
+        offer_json.ok_or_else(|| anyhow!("timed out waiting for offer in room '{room}'"))?;
     let offer: RTCSessionDescription = serde_json::from_str(&offer_json).context("parse offer")?;
     pc.set_remote_description(offer).await?;
-    emit_log(events, LogLevel::Handshake, format!("room '{room}': remote offer set"));
+    emit_log(
+        events,
+        LogLevel::Handshake,
+        format!("room '{room}': remote offer set"),
+    );
 
     // Create answer, set local description, post to signaling.
     let answer = pc.create_answer(None).await?;
     pc.set_local_description(answer.clone()).await?;
     let answer_json = serde_json::to_string(&answer)?;
-    sig.post_answer(&room, &answer_json).await.context("post answer")?;
-    emit_log(events, LogLevel::Handshake, format!("room '{room}': answer posted"));
+    sig.post_answer(&room, &answer_json)
+        .await
+        .context("post answer")?;
+    emit_log(
+        events,
+        LogLevel::Handshake,
+        format!("room '{room}': answer posted"),
+    );
 
     {
         let mut g = peers.lock().await;
-        g.insert(peer_id, PeerCtx {
-            id: peer_id,
-            label,
-            pc: Arc::clone(&pc),
-            ctrl: None, // control channel arrives via on_data_channel
-            tunnels: HashMap::new(),
-            last_ping: None,
-        });
+        g.insert(
+            peer_id,
+            PeerCtx {
+                id: peer_id,
+                label,
+                pc: Arc::clone(&pc),
+                ctrl: None, // control channel arrives via on_data_channel
+                tunnels: HashMap::new(),
+                last_ping: None,
+            },
+        );
     }
     spawn_ping_loop(peer_id, Arc::clone(peers), events.clone(), metrics.clone());
 
     // Drain remote ICE candidates (side a) and add them.
-    spawn_ice_drain(sig.clone(), room.clone(), 'a', Arc::clone(&pc), events.clone());
+    spawn_ice_drain(
+        sig.clone(),
+        room.clone(),
+        'a',
+        Arc::clone(&pc),
+        events.clone(),
+    );
     Ok(())
 }
 
@@ -1116,7 +1334,10 @@ fn spawn_ice_drain(
                 }
             };
             for cand in cands {
-                let key = format!("{}|{:?}|{:?}", cand.candidate, cand.sdp_mid, cand.sdp_mline_index);
+                let key = format!(
+                    "{}|{:?}|{:?}",
+                    cand.candidate, cand.sdp_mid, cand.sdp_mline_index
+                );
                 if seen.insert(key) {
                     let init = RTCIceCandidateInit {
                         candidate: cand.candidate,
@@ -1160,13 +1381,19 @@ fn spawn_ping_loop(
                 .unwrap_or_default()
                 .as_nanos();
             if ctrl.send(&Bytes::from(format!("ping:{ts}"))).await.is_err() {
-                emit_log(&events, LogLevel::Warn, format!("peer {peer_id}: ping send failed"));
-                let _ = metrics.cmd_tx.send(crate::network::metrics::MetricsCmd::Packets {
-                    peer: peer_id,
-                    sent: 0,
-                    recv: 0,
-                    lost: 1,
-                });
+                emit_log(
+                    &events,
+                    LogLevel::Warn,
+                    format!("peer {peer_id}: ping send failed"),
+                );
+                let _ = metrics
+                    .cmd_tx
+                    .send(crate::network::metrics::MetricsCmd::Packets {
+                        peer: peer_id,
+                        sent: 0,
+                        recv: 0,
+                        lost: 1,
+                    });
             }
         }
     });
@@ -1191,7 +1418,11 @@ fn spawn_nat_discovery(
         // discovery as pending and let the first peer's ICE state fill it in.
         let _ = public_ip_tx.send(None);
         let _ = nat_type_tx.send("unknown (pending ICE)".into());
-        emit_log(&events, LogLevel::Info, "NAT discovery: awaiting first ICE gathering");
+        emit_log(
+            &events,
+            LogLevel::Info,
+            "NAT discovery: awaiting first ICE gathering",
+        );
     });
 }
 

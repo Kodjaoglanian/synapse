@@ -36,14 +36,21 @@ pub async fn spawn_listener(
     emit_log(
         &events,
         LogLevel::Info,
-        format!("listening {} for tunnel '{}'", tunnel.local_addr, tunnel.label),
+        format!(
+            "listening {} for tunnel '{}'",
+            tunnel.local_addr, tunnel.label
+        ),
     );
 
     loop {
         let (mut tcp, peer_addr) = match listener.accept().await {
             Ok(v) => v,
             Err(e) => {
-                emit_log(&events, LogLevel::Error, format!("accept {}: {e}", tunnel.local_addr));
+                emit_log(
+                    &events,
+                    LogLevel::Error,
+                    format!("accept {}: {e}", tunnel.local_addr),
+                );
                 continue;
             }
         };
@@ -56,7 +63,10 @@ pub async fn spawn_listener(
                 emit_log(
                     &events,
                     LogLevel::Warn,
-                    format!("tunnel '{}': no peer channel yet ({e}); closing tcp", tunnel.label),
+                    format!(
+                        "tunnel '{}': no peer channel yet ({e}); closing tcp",
+                        tunnel.label
+                    ),
                 );
                 let _ = tcp.shutdown().await;
                 continue;
@@ -70,7 +80,11 @@ pub async fn spawn_listener(
         let t = tunnel.clone();
         tokio::spawn(async move {
             if let Err(e) = handle_conn(tcp, peer_addr, dc, t, mesh_c, events_c, metrics_c).await {
-                emit_log(&events_err, LogLevel::Error, format!("conn {peer_addr}: {e:#}"));
+                emit_log(
+                    &events_err,
+                    LogLevel::Error,
+                    format!("conn {peer_addr}: {e:#}"),
+                );
             }
         });
     }
@@ -149,7 +163,11 @@ async fn handle_conn(
         g.streams.insert(sid, info.clone());
     }
     let _ = events.send(NetEvent::StreamOpened(info));
-    emit_log(&events, LogLevel::Info, format!("stream {sid} open on tunnel '{tunnel_label}'"));
+    emit_log(
+        &events,
+        LogLevel::Info,
+        format!("stream {sid} open on tunnel '{tunnel_label}'"),
+    );
 
     // Split the TCP stream.
     let (mut tcp_rd, mut tcp_wr) = tcp.into_split();
@@ -180,15 +198,21 @@ async fn handle_conn(
                     break;
                 }
             };
-            if dc_up.send(&bytes::Bytes::copy_from_slice(&buf[..n])).await.is_err() {
+            if dc_up
+                .send(&bytes::Bytes::copy_from_slice(&buf[..n]))
+                .await
+                .is_err()
+            {
                 break;
             }
             total += n as u64;
-            let _ = metrics_up.cmd_tx.send(crate::network::metrics::MetricsCmd::Bytes {
-                peer: peer_id,
-                sent: n as u64,
-                recv: 0,
-            });
+            let _ = metrics_up
+                .cmd_tx
+                .send(crate::network::metrics::MetricsCmd::Bytes {
+                    peer: peer_id,
+                    sent: n as u64,
+                    recv: 0,
+                });
             let _ = events_up.send(NetEvent::StreamUpdated(StreamInfo {
                 id: sid,
                 tunnel_id,
@@ -216,11 +240,13 @@ async fn handle_conn(
                 break;
             }
             total += n as u64;
-            let _ = metrics_down.cmd_tx.send(crate::network::metrics::MetricsCmd::Bytes {
-                peer: peer_id,
-                sent: 0,
-                recv: n as u64,
-            });
+            let _ = metrics_down
+                .cmd_tx
+                .send(crate::network::metrics::MetricsCmd::Bytes {
+                    peer: peer_id,
+                    sent: 0,
+                    recv: n as u64,
+                });
             let _ = events_down.send(NetEvent::StreamUpdated(StreamInfo {
                 id: sid,
                 tunnel_id,
@@ -301,13 +327,15 @@ impl DataChannelReader {
         let tx = Arc::new(tx);
         dc.on_message(Box::new({
             let tx = Arc::clone(&tx);
-            Box::new(move |msg: webrtc::data_channel::data_channel_message::DataChannelMessage| {
-                let tx = Arc::clone(&tx);
-                Box::pin(async move {
-                    let _ = tx.send(msg.data.to_vec()).await;
-                })
-                    as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>
-            })
+            Box::new(
+                move |msg: webrtc::data_channel::data_channel_message::DataChannelMessage| {
+                    let tx = Arc::clone(&tx);
+                    Box::pin(async move {
+                        let _ = tx.send(msg.data.to_vec()).await;
+                    })
+                        as std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>
+                },
+            )
         }));
         Self { dc, rx }
     }

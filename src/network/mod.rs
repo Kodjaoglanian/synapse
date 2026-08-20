@@ -18,8 +18,8 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, watch, Mutex};
 use std::sync::Arc;
+use tokio::sync::{broadcast, watch, Mutex};
 
 /// Stable identifier for a peer (random u64 rendered as short hex).
 pub type PeerId = u64;
@@ -132,7 +132,10 @@ pub enum NetEvent {
     TunnelRemoved(u32),
     Log(LogLevel, String),
     /// A new SDP offer/answer was produced and should be shared out-of-band.
-    SdpReady { peer: PeerId, sdp: String },
+    SdpReady {
+        peer: PeerId,
+        sdp: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

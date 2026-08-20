@@ -8,20 +8,27 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Row, Table};
 use ratatui::Frame;
 
+use super::theme as t;
 use crate::app::{App, Focus};
 use crate::network::{fmt_bytes, LinkKind, PeerStatus, StreamStatus};
-use super::theme as t;
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let active = app.focus == Focus::Tunnels;
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
-        .border_style(if active { t::panel_border_active_style() } else { t::panel_border_style() })
+        .border_style(if active {
+            t::panel_border_active_style()
+        } else {
+            t::panel_border_style()
+        })
         .title(t::panel_title("⇄", "Tunnels & Streams"));
     f.render_widget(block, area);
 
-    let inner = area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 1 });
+    let inner = area.inner(&ratatui::layout::Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(4), Constraint::Min(3)])
@@ -43,7 +50,10 @@ fn draw_tunnels(f: &mut Frame, app: &App, area: Rect) {
             Row::new(vec![
                 Line::from(Span::styled(format!("{}", p.id), t::header_value_style())),
                 Line::from(Span::styled(p.label.clone(), t::header_value_style())),
-                Line::from(Span::styled(format!("{:?}", p.status), super::status_style(p.status))),
+                Line::from(Span::styled(
+                    format!("{:?}", p.status),
+                    super::status_style(p.status),
+                )),
                 Line::from(Span::styled(
                     format!("{:?}", p.link),
                     super::link_style(p.link),
@@ -63,11 +73,20 @@ fn draw_tunnels(f: &mut Frame, app: &App, area: Rect) {
 
     let table = Table::new(
         rows,
-        [Constraint::Length(6), Constraint::Min(8), Constraint::Length(12), Constraint::Min(10)],
+        [
+            Constraint::Length(6),
+            Constraint::Min(8),
+            Constraint::Length(12),
+            Constraint::Min(10),
+        ],
     )
     .header(header)
     .style(Style::default().bg(t::palette::BG).fg(t::palette::FG))
-    .highlight_style(Style::default().bg(t::palette::BG_ALT).add_modifier(ratatui::style::Modifier::BOLD));
+    .highlight_style(
+        Style::default()
+            .bg(t::palette::BG_ALT)
+            .add_modifier(ratatui::style::Modifier::BOLD),
+    );
     f.render_widget(table, area);
 }
 
@@ -81,13 +100,20 @@ fn draw_streams(f: &mut Frame, app: &App, area: Rect) {
         if p.bytes_sent + p.bytes_recv == 0 {
             continue;
         }
-        let status = if p.status == PeerStatus::Connected { StreamStatus::Transferring } else { StreamStatus::Closed };
+        let status = if p.status == PeerStatus::Connected {
+            StreamStatus::Transferring
+        } else {
+            StreamStatus::Closed
+        };
         let dur = p
             .connected_at
             .map(|c| now.duration_since(c))
             .unwrap_or_else(|| Duration::ZERO);
         rows.push(Row::new(vec![
-            Line::from(Span::styled(format!("{:#x}", p.id), t::header_value_style())),
+            Line::from(Span::styled(
+                format!("{:#x}", p.id),
+                t::header_value_style(),
+            )),
             Line::from(Span::styled(p.label.clone(), t::header_value_style())),
             Line::from(Span::styled(format!("{:?}", status), stream_style(status))),
             Line::from(Span::styled(fmt_dur(dur), t::dim_style())),

@@ -6,9 +6,7 @@ use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::network::{
-    EngineCmd, LogLevel, MetricsSnapshot, NetEvent, Network, PeerId, Tunnel,
-};
+use crate::network::{EngineCmd, LogLevel, MetricsSnapshot, NetEvent, Network, PeerId, Tunnel};
 
 /// Which panel currently has keyboard focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,7 +177,11 @@ impl App {
         if self.log.len() >= LOG_CAP {
             self.log.pop_front();
         }
-        self.log.push_back(LogEntry { level, msg, at: Instant::now() });
+        self.log.push_back(LogEntry {
+            level,
+            msg,
+            at: Instant::now(),
+        });
     }
 
     /// Drain any pending network events into app state.
@@ -208,16 +210,33 @@ impl App {
             NetEvent::Log(level, msg) => self.push_log(level, msg),
             NetEvent::PeerAdded(_) => self.push_log(LogLevel::Info, "peer added".into()),
             NetEvent::PeerUpdated(_) => {}
-            NetEvent::PeerRemoved(id) => self.push_log(LogLevel::Warn, format!("peer {id} removed")),
-            NetEvent::PeerConnected(id) => self.push_log(LogLevel::Handshake, format!("peer {id} connected")),
-            NetEvent::PeerFailed(id, why) => self.push_log(LogLevel::Error, format!("peer {id} failed: {why}")),
-            NetEvent::StreamOpened(s) => self.push_log(LogLevel::Info, format!("stream {} open", s.id)),
+            NetEvent::PeerRemoved(id) => {
+                self.push_log(LogLevel::Warn, format!("peer {id} removed"))
+            }
+            NetEvent::PeerConnected(id) => {
+                self.push_log(LogLevel::Handshake, format!("peer {id} connected"))
+            }
+            NetEvent::PeerFailed(id, why) => {
+                self.push_log(LogLevel::Error, format!("peer {id} failed: {why}"))
+            }
+            NetEvent::StreamOpened(s) => {
+                self.push_log(LogLevel::Info, format!("stream {} open", s.id))
+            }
             NetEvent::StreamUpdated(_) => {}
-            NetEvent::StreamClosed(id) => self.push_log(LogLevel::Info, format!("stream {id} closed")),
-            NetEvent::TunnelAdded(t) => self.push_log(LogLevel::Info, format!("tunnel '{}' added", t.label)),
-            NetEvent::TunnelRemoved(id) => self.push_log(LogLevel::Warn, format!("tunnel {id} removed")),
+            NetEvent::StreamClosed(id) => {
+                self.push_log(LogLevel::Info, format!("stream {id} closed"))
+            }
+            NetEvent::TunnelAdded(t) => {
+                self.push_log(LogLevel::Info, format!("tunnel '{}' added", t.label))
+            }
+            NetEvent::TunnelRemoved(id) => {
+                self.push_log(LogLevel::Warn, format!("tunnel {id} removed"))
+            }
             NetEvent::SdpReady { peer, sdp } => {
-                self.push_log(LogLevel::Handshake, format!("SDP ready for peer {peer} ({} bytes)", sdp.len()));
+                self.push_log(
+                    LogLevel::Handshake,
+                    format!("SDP ready for peer {peer} ({} bytes)", sdp.len()),
+                );
             }
         }
     }
@@ -226,7 +245,13 @@ impl App {
     pub fn refresh_snapshot(&mut self) {
         // watch::Receiver exposes the latest value via borrow; mark seen so
         // has_changed() stays accurate. We just take the latest snapshot.
-        if self.network.metrics.snapshot_rx.has_changed().unwrap_or(false) {
+        if self
+            .network
+            .metrics
+            .snapshot_rx
+            .has_changed()
+            .unwrap_or(false)
+        {
             self.snapshot = self.network.metrics.snapshot_rx.borrow_and_update().clone();
         }
     }
@@ -287,7 +312,8 @@ impl App {
                 KeyCode::Up | KeyCode::Char('k') => {
                     if peer_count > 0 {
                         let cur = self.selected_peer.unwrap_or(0);
-                        self.selected_peer = Some(cur.checked_sub(1).unwrap_or(peer_count.saturating_sub(1)));
+                        self.selected_peer =
+                            Some(cur.checked_sub(1).unwrap_or(peer_count.saturating_sub(1)));
                     }
                 }
                 KeyCode::Enter => {
@@ -316,7 +342,8 @@ impl App {
                 KeyCode::Up | KeyCode::Char('k') => {
                     if tunnel_count > 0 {
                         let cur = self.selected_tunnel.unwrap_or(0);
-                        self.selected_tunnel = Some(cur.checked_sub(1).unwrap_or(tunnel_count.saturating_sub(1)));
+                        self.selected_tunnel =
+                            Some(cur.checked_sub(1).unwrap_or(tunnel_count.saturating_sub(1)));
                     }
                 }
                 KeyCode::Char('x') => {
@@ -390,11 +417,17 @@ impl App {
                             let room = form.room.clone();
                             let (cmd, verb) = match form.mode {
                                 SignalingMode::Dial => (
-                                    EngineCmd::DialSignaling { label: label.clone(), room: room.clone() },
+                                    EngineCmd::DialSignaling {
+                                        label: label.clone(),
+                                        room: room.clone(),
+                                    },
                                     "dial",
                                 ),
                                 SignalingMode::Answer => (
-                                    EngineCmd::AnswerSignaling { label: label.clone(), room: room.clone() },
+                                    EngineCmd::AnswerSignaling {
+                                        label: label.clone(),
+                                        room: room.clone(),
+                                    },
                                     "answer",
                                 ),
                             };
@@ -432,10 +465,15 @@ impl App {
                         }
                     }
                     KeyCode::Char(c) => match form.field {
-                        SignalingField::Label | SignalingField::Room => insert_signaling_char(form, c),
+                        SignalingField::Label | SignalingField::Room => {
+                            insert_signaling_char(form, c)
+                        }
                         SignalingField::Mode => {
-                            if c == 'd' { form.mode = SignalingMode::Dial; }
-                            else if c == 'a' { form.mode = SignalingMode::Answer; }
+                            if c == 'd' {
+                                form.mode = SignalingMode::Dial;
+                            } else if c == 'a' {
+                                form.mode = SignalingMode::Answer;
+                            }
                         }
                         _ => {}
                     },
@@ -460,21 +498,23 @@ impl App {
                     }
                     KeyCode::Tab => form.field = next_field(form.field),
                     KeyCode::BackTab => form.field = prev_field(form.field),
-                    KeyCode::Enter => {
-                        match form.field {
-                            FormField::Submit => {
-                                let label = form.label.clone();
-                                let sdp = form.sdp.clone();
-                                let is_offer = form.is_offer;
-                                let cmd = EngineCmd::QuickConnect { label, sdp, is_offer };
-                                let _ = self.network.engine.cmd_tx.send(cmd);
-                                self.push_log(LogLevel::Info, "quick-connect submitted".into());
-                                self.modal = Modal::None;
-                            }
-                            FormField::Cancel => self.modal = Modal::None,
-                            _ => form.field = next_field(form.field),
+                    KeyCode::Enter => match form.field {
+                        FormField::Submit => {
+                            let label = form.label.clone();
+                            let sdp = form.sdp.clone();
+                            let is_offer = form.is_offer;
+                            let cmd = EngineCmd::QuickConnect {
+                                label,
+                                sdp,
+                                is_offer,
+                            };
+                            let _ = self.network.engine.cmd_tx.send(cmd);
+                            self.push_log(LogLevel::Info, "quick-connect submitted".into());
+                            self.modal = Modal::None;
                         }
-                    }
+                        FormField::Cancel => self.modal = Modal::None,
+                        _ => form.field = next_field(form.field),
+                    },
                     KeyCode::Backspace => {
                         if matches!(form.field, FormField::Label | FormField::Sdp) {
                             if form.cursor > 0 {
@@ -500,16 +540,17 @@ impl App {
                             insert_char(form, ' ');
                         }
                     }
-                    KeyCode::Char(c) => {
-                        match form.field {
-                            FormField::Label | FormField::Sdp => insert_char(form, c),
-                            FormField::IsOffer => {
-                                if c == 'y' { form.is_offer = true; }
-                                else if c == 'n' { form.is_offer = false; }
+                    KeyCode::Char(c) => match form.field {
+                        FormField::Label | FormField::Sdp => insert_char(form, c),
+                        FormField::IsOffer => {
+                            if c == 'y' {
+                                form.is_offer = true;
+                            } else if c == 'n' {
+                                form.is_offer = false;
                             }
-                            _ => {}
                         }
-                    }
+                        _ => {}
+                    },
                     _ => {}
                 }
                 AppAction::None
@@ -605,5 +646,9 @@ pub fn open_tunnel(app: &mut App, t: Tunnel) {
 /// Helper to dial a peer from the UI.
 #[allow(dead_code)]
 pub fn dial(app: &mut App, label: String, token: String) {
-    let _ = app.network.engine.cmd_tx.send(EngineCmd::Dial { label, token });
+    let _ = app
+        .network
+        .engine
+        .cmd_tx
+        .send(EngineCmd::Dial { label, token });
 }
