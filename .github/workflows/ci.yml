@@ -3,45 +3,78 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 3
+  RUSTUP_MAX_RETRIES: 3
+  RUSTFLAGS: -D warnings
 
 jobs:
+  # Fast lint job — runs first, fails fast on formatting or clippy issues.
+  lint:
+    name: Lint (fmt + clippy)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: lint
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features
+
+  # Build matrix — all platforms in parallel.
   build:
-    name: Build and check (${{ matrix.os }}/${{ matrix.arch }})
+    name: Build ${{ matrix.target }}
+    needs: lint
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
-            arch: x86_64
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-22.04
-            arch: aarch64
-            target: aarch64-unknown-linux-gnu
-          - os: macos-14
-            arch: aarch64
-            target: aarch64-apple-darwin
-          - os: macos-14
-            arch: x86_64
-            target: x86_64-apple-darwin
-          - os: windows-2022
-            arch: x86_64
-            target: x86_64-pc-windows-msvc
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            cross: false
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-14
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-14
+            cross: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-2022
+            cross: false
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux aarch64)
+      - name: Install cross linker (Linux aarch64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
@@ -50,30 +83,45 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          key: ci-${{ matrix.target }}
 
-      - name: Build
-        run: cargo build --target ${{ matrix.target }} --verbose
+      - name: Build (debug)
+        run: cargo build --target ${{ matrix.target }}
 
-      - name: Check formatting
-        if: matrix.os == 'ubuntu-22.04' && matrix.arch == 'x86_64'
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        if: matrix.os == 'ubuntu-22.04' && matrix.arch == 'x86_64'
-        run: cargo clippy --all-targets -- -D warnings || cargo clippy --all-targets
-
-  # Quick smoke test: build and run --help in headless mode.
+  # Smoke test — build release and exercise the binary.
   smoke-test:
-    name: Smoke test (--help)
+    name: Smoke test
+    needs: lint
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: smoke
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: --help works
+        run: ./target/release/synapse --help
+
+      - name: --version works
+        run: ./target/release/synapse --version
+
+      - name: --headless starts and exits
+        run: timeout 2 ./target/release/synapse --headless || code=$?; [ "${code:-0}" = "124" ] || [ "${code:-0}" = "0" ]
+
+  # Verify Cargo.lock is committed and up to date.
+  check-lockfile:
+    name: Check lockfile
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --release
-      - name: Run --help
-        run: ./target/release/synapse --help
-      - name: Run --headless (2s timeout)
-        run: timeout 2 ./target/release/synapse --headless || true
+      - name: Cargo.lock is up to date
+        run: cargo generate-lockfile --locked && git diff --exit-code Cargo.lock

@@ -8,10 +8,18 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 3
+  RUSTUP_MAX_RETRIES: 3
 
 jobs:
+  # Build all targets in parallel, strip binaries, generate per-target checksums.
   build:
     name: Build ${{ matrix.target }}
     strategy:
@@ -21,29 +29,34 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
             archive: tar.gz
+            strip: true
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
             archive: tar.gz
+            strip: true
           - target: x86_64-apple-darwin
             os: macos-14
             archive: tar.gz
+            strip: true
           - target: aarch64-apple-darwin
             os: macos-14
             archive: tar.gz
+            strip: true
           - target: x86_64-pc-windows-msvc
             os: windows-2022
             archive: zip
+            strip: false
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux aarch64)
+      - name: Install cross linker (Linux aarch64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
@@ -52,13 +65,17 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: release-${{ matrix.target }}
+          key: release-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
 
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
-        timeout-minutes: 15
+        env:
+          # Fat LTO + single codegen unit for maximum optimization.
+          CARGO_PROFILE_RELEASE_LTO: fat
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+          CARGO_PROFILE_RELEASE_STRIP: ${{ matrix.strip }}
 
-      - name: Get version from tag
+      - name: Get version
         id: version
         shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
@@ -67,36 +84,51 @@ jobs:
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
-          staging="synapse-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
-          mkdir "$staging"
-          cp target/${{ matrix.target }}/release/synapse "$staging/"
-          cp README.md "$staging/" 2>/dev/null || true
-          cp LICENSE "$staging/" 2>/dev/null || true
-          tar czf "$staging.tar.gz" "$staging"
-          echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TARGET="${{ matrix.target }}"
+          STAGING="synapse-${VERSION}-${TARGET}"
+          mkdir "$STAGING"
+          cp "target/${TARGET}/release/synapse" "$STAGING/"
+          cp README.md LICENSE CHANGELOG.md "$STAGING/" 2>/dev/null || true
+          # Generate SHA256 checksum for the binary.
+          sha256sum "target/${TARGET}/release/synapse" | awk '{print $1}' > "${STAGING}.sha256"
+          tar czf "${STAGING}.tar.gz" "$STAGING"
+          echo "ASSET=${STAGING}.tar.gz" >> $GITHUB_ENV
+          echo "CHECKSUM=${STAGING}.sha256" >> $GITHUB_ENV
 
       - name: Package (Windows)
         if: matrix.archive == 'zip'
         shell: pwsh
         run: |
-          $staging = "synapse-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}"
-          New-Item -ItemType Directory -Path $staging
-          Copy-Item "target/${{ matrix.target }}/release/synapse.exe" "$staging/"
-          Copy-Item "README.md" "$staging/" -ErrorAction SilentlyContinue
-          Copy-Item "LICENSE" "$staging/" -ErrorAction SilentlyContinue
-          Compress-Archive -Path "$staging" -DestinationPath "$staging.zip"
-          echo "ASSET=$staging.zip" >> $env:GITHUB_ENV
+          $Version = "${{ steps.version.outputs.VERSION }}"
+          $Target = "${{ matrix.target }}"
+          $Staging = "synapse-$Version-$Target"
+          New-Item -ItemType Directory -Path $Staging
+          Copy-Item "target/$Target/release/synapse.exe" "$Staging/"
+          Copy-Item "README.md","LICENSE","CHANGELOG.md" "$Staging/" -ErrorAction SilentlyContinue
+          # Generate SHA256 checksum.
+          $Hash = (Get-FileHash "target/$Target/release/synapse.exe" -Algorithm SHA256).Hash.ToLower()
+          "$Hash" | Out-File -Encoding ascii -NoNewline "synapse-$Version-$Target.sha256"
+          Compress-Archive -Path $Staging -DestinationPath "synapse-$Version-$Target.zip"
+          echo "ASSET=synapse-$Version-$Target.zip" >> $env:GITHUB_ENV
+          echo "CHECKSUM=synapse-$Version-$Target.sha256" >> $env:GITHUB_ENV
 
-      - name: Upload artifact
+      - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: synapse-${{ matrix.target }}
-          path: synapse-*-${{ matrix.target }}.*
+          name: asset-${{ matrix.target }}
+          path: |
+            synapse-*.tar.gz
+            synapse-*.zip
+            synapse-*.sha256
+          retention-days: 7
 
+  # Collect all artifacts, generate a combined checksums file, create the release.
   release:
-    name: Create GitHub Release
+    name: Publish release
     needs: build
     runs-on: ubuntu-22.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -106,20 +138,34 @@ jobs:
           path: artifacts
           merge-multiple: false
 
-      - name: Flatten artifacts
+      - name: Flatten and generate checksums
+        shell: bash
         run: |
+          set -eu
           mkdir -p release-assets
+          # Move all archives and checksums into a flat directory.
           find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-assets/ \;
+          # Build a single checksums.txt with all per-target SHA256 values.
+          CHECKSUMS_FILE="release-assets/synapse-checksums.txt"
+          echo "# synapse ${GITHUB_REF#refs/tags/} — SHA256 checksums" > "$CHECKSUMS_FILE"
+          echo "# Verify with: sha256sum -c synapse-checksums.txt" >> "$CHECKSUMS_FILE"
+          echo "" >> "$CHECKSUMS_FILE"
+          for f in release-assets/*.tar.gz release-assets/*.zip; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            sha256sum "$f" | awk -v b="$base" '{print $1"  "b}' >> "$CHECKSUMS_FILE"
+          done
+          echo "--- Release assets ---"
           ls -la release-assets/
+          echo "--- Checksums ---"
+          cat "$CHECKSUMS_FILE"
 
-      - name: Generate changelog
-        id: changelog
+      - name: Generate release notes
+        id: notes
         shell: bash
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          # Extract the section from CHANGELOG.md matching this version.
           if [ -f CHANGELOG.md ]; then
-            # Grab everything between the version header and the next version header.
             BODY=$(awk -v v="$VERSION" '
               /^## \[/ {
                 if (found) exit
@@ -133,15 +179,52 @@ jobs:
           else
             BODY="Release $VERSION."
           fi
-          echo "BODY<<EOFMARKER" >> $GITHUB_OUTPUT
-          echo "$BODY" >> $GITHUB_OUTPUT
-          echo "EOFMARKER" >> $GITHUB_OUTPUT
+          {
+            echo "BODY<<EOFMARKER"
+            echo "$BODY"
+            echo ""
+            echo "## Downloads"
+            echo ""
+            echo "| Platform | Asset |"
+            echo "|----------|-------|"
+            echo "| Linux x86_64 | \`synapse-${VERSION}-x86_64-unknown-linux-gnu.tar.gz\` |"
+            echo "| Linux ARM64 | \`synapse-${VERSION}-aarch64-unknown-linux-gnu.tar.gz\` |"
+            echo "| macOS Intel | \`synapse-${VERSION}-x86_64-apple-darwin.tar.gz\` |"
+            echo "| macOS Apple Silicon | \`synapse-${VERSION}-aarch64-apple-darwin.tar.gz\` |"
+            echo "| Windows x86_64 | \`synapse-${VERSION}-x86_64-pc-windows-msvc.zip\` |"
+            echo ""
+            echo "## Verify checksums"
+            echo ""
+            echo '```bash'
+            echo "sha256sum -c synapse-checksums.txt"
+            echo '```'
+            echo "EOFMARKER"
+          } >> $GITHUB_OUTPUT
 
-      - name: Create release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body: ${{ steps.changelog.outputs.BODY }}
+          body: ${{ steps.notes.outputs.BODY }}
           files: release-assets/*
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
-          generate_release_notes: true
+          name: ${{ github.ref_name }}
+
+  # Post-release verification: download each binary and run --version.
+  verify:
+    name: Verify release binaries
+    needs: release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Download and verify Linux x86_64
+        run: |
+          set -eu
+          VERSION=${GITHUB_REF#refs/tags/}
+          BASE="https://github.com/${{ github.repository }}/releases/download/${VERSION}"
+          curl -fsSL "$BASE/synapse-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" -o /tmp/synapse.tar.gz
+          curl -fsSL "$BASE/synapse-checksums.txt" -o /tmp/checksums.txt
+          cd /tmp && grep "x86_64-unknown-linux-gnu.tar.gz" checksums.txt | sha256sum -c -
+          tar xzf synapse.tar.gz
+          ./synapse-${VERSION}-x86_64-unknown-linux-gnu/synapse --version
+          echo "✓ Linux x86_64 binary verified"
