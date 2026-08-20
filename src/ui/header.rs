@@ -11,7 +11,7 @@ use crate::app::App;
 use crate::i18n;
 use crate::network::{fmt_bytes, fmt_rate};
 
-pub fn draw(f: &mut Frame, app: &App, area: Rect) {
+pub fn draw(f: &mut Frame, app: &App, area: Rect, compact: bool) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
@@ -23,6 +23,50 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         vertical: 1,
         horizontal: 2,
     });
+
+    let snap = &app.snapshot;
+    let up = fmt_rate(snap.up_rate_bps);
+    let down = fmt_rate(snap.down_rate_bps);
+    let rtt = if snap.avg_rtt_ms > 0 {
+        format!("{} ms", snap.avg_rtt_ms)
+    } else {
+        "—".into()
+    };
+    let pkts = snap.total_packets;
+    let lost = snap.total_lost;
+    let ip = app
+        .public_ip
+        .clone()
+        .unwrap_or_else(|| i18n::t().discovering_ip.into());
+    let nat = app.nat_type.clone();
+    let mode = app.mode.clone();
+    let peers = snap.peers.len();
+    let tx = i18n::t();
+
+    if compact {
+        // Compact: 2 lines of stats, no ASCII banner.
+        let rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Length(1)])
+            .split(inner);
+
+        let row1 = Line::from(stat_spans(&[
+            (tx.label_public_ip, &ip),
+            (tx.label_nat, &nat),
+            (tx.label_peers, &format!("{peers}")),
+        ]));
+        let row2 = Line::from(stat_spans(&[
+            (tx.label_up, &up),
+            (tx.label_down, &down),
+            (tx.label_rtt, &rtt),
+            (tx.label_mode, &mode),
+        ]));
+        f.render_widget(row1, rows[0]);
+        f.render_widget(row2, rows[1]);
+        return;
+    }
+
+    // Full mode: ASCII art + stats grid.
     // Left: ASCII art. Right: stats grid.
     let cols = Layout::default()
         .direction(Direction::Horizontal)
@@ -49,25 +93,6 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             Constraint::Length(1),
         ])
         .split(cols[1]);
-
-    let snap = &app.snapshot;
-    let up = fmt_rate(snap.up_rate_bps);
-    let down = fmt_rate(snap.down_rate_bps);
-    let rtt = if snap.avg_rtt_ms > 0 {
-        format!("{} ms", snap.avg_rtt_ms)
-    } else {
-        "—".into()
-    };
-    let pkts = snap.total_packets;
-    let lost = snap.total_lost;
-    let ip = app
-        .public_ip
-        .clone()
-        .unwrap_or_else(|| i18n::t().discovering_ip.into());
-    let nat = app.nat_type.clone();
-    let mode = app.mode.clone();
-    let peers = snap.peers.len();
-    let tx = i18n::t();
 
     let row1 = Line::from(stat_spans(&[
         (tx.label_public_ip, &ip),

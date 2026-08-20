@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.1.8] - 2025-01-20
+
+### Fixed
+
+- **Peers not visible in TUI on small terminals**: the layout used 10 lines
+  for the ASCII banner header + 10 lines for the bottom panel, leaving zero
+  space for the graph and peer list on terminals with fewer than ~34 rows.
+  The layout is now responsive:
+  - **Compact mode** (< 30 rows): 5-line header (stats only, no ASCII art),
+    7-line bottom (log only, no sparklines), giving ~12+ rows to the graph.
+  - **Full mode** (>= 30 rows): original layout with ASCII banner.
+- **Removed debug overlay** that was added for diagnosis.
+
 ## [0.1.7] - 2025-01-20
 
 ### Changed

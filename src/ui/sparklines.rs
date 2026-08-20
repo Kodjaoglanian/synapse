@@ -10,7 +10,7 @@ use super::theme as t;
 use crate::app::{App, Focus};
 use crate::network::LogLevel;
 
-pub fn draw(f: &mut Frame, app: &App, area: Rect) {
+pub fn draw(f: &mut Frame, app: &App, area: Rect, compact: bool) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
@@ -22,6 +22,13 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         vertical: 1,
         horizontal: 1,
     });
+
+    if compact {
+        // Compact: just the log, no sparklines, no extra borders.
+        draw_log_inner(f, app, inner);
+        return;
+    }
+
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(34), Constraint::Min(0)])
@@ -116,6 +123,10 @@ fn draw_log(f: &mut Frame, app: &App, area: Rect) {
         vertical: 1,
         horizontal: 1,
     });
+    draw_log_inner(f, app, inner);
+}
+
+fn draw_log_inner(f: &mut Frame, app: &App, inner: Rect) {
     // Show the most recent entries (bottom of buffer = newest).
     let items: Vec<ListItem> = app
         .log

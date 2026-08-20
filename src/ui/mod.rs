@@ -29,6 +29,7 @@ use theme as t;
 /// Top-level draw entrypoint called every frame.
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.size();
+    let compact = area.height < 30;
 
     // Background fill so the palette reads consistently.
     f.render_widget(
@@ -36,16 +37,29 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         area,
     );
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(10), // header (7-line ASCII + borders + padding)
-            Constraint::Min(12),    // middle (graph + tunnels)
-            Constraint::Length(10), // bottom (sparklines + log)
-        ])
-        .split(area);
+    // Responsive layout: compact mode for small terminals (< 30 rows),
+    // full mode with ASCII banner for larger ones.
+    let chunks = if compact {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(5), // compact header (2-line stats + borders)
+                Constraint::Min(8),    // middle (graph + tunnels)
+                Constraint::Length(7), // compact bottom (sparklines + log)
+            ])
+            .split(area)
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(10), // header (7-line ASCII + borders + padding)
+                Constraint::Min(12),    // middle (graph + tunnels)
+                Constraint::Length(10), // bottom (sparklines + log)
+            ])
+            .split(area)
+    };
 
-    header::draw(f, app, chunks[0]);
+    header::draw(f, app, chunks[0], compact);
 
     let middle = Layout::default()
         .direction(Direction::Horizontal)
@@ -54,10 +68,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     graph::draw(f, app, middle[0]);
     tunnels::draw(f, app, middle[1]);
 
-    sparklines::draw(f, app, chunks[2]);
-
-    // Debug overlay (top-right corner).
-    draw_debug_overlay(f, app);
+    sparklines::draw(f, app, chunks[2], compact);
 
     // Modal overlay.
     draw_modal(f, app);
@@ -503,35 +514,4 @@ pub fn link_style(l: crate::network::LinkKind) -> ratatui::style::Style {
         LinkKind::DirectSlow => t::status_warn_style(),
         LinkKind::Relay => t::status_relay_style(),
     }
-}
-
-/// Debug overlay showing snapshot peer count and status.
-fn draw_debug_overlay(f: &mut Frame, app: &App) {
-    let area = f.size();
-    let peer_count = app.snapshot.peers.len();
-    let overlay = Rect {
-        x: area.width.saturating_sub(50),
-        y: 1,
-        width: 48,
-        height: 3 + (peer_count as u16) * 2,
-    };
-    let mut lines = vec![ratatui::text::Line::styled(
-        format!("[DBG] peers={} tick={}", peer_count, app.tick),
-        t::status_warn_style(),
-    )];
-    for p in app.snapshot.peers.values() {
-        lines.push(ratatui::text::Line::styled(
-            format!("  {} {:?}", p.label, p.status),
-            t::status_ok_style(),
-        ));
-        lines.push(ratatui::text::Line::styled(
-            format!("  link={:?} rtt={} relayed={}", p.link, p.rtt_ms, p.relayed),
-            t::dim_style(),
-        ));
-    }
-    f.render_widget(
-        ratatui::widgets::Paragraph::new(lines)
-            .style(ratatui::style::Style::default().bg(t::palette::BG)),
-        overlay,
-    );
 }
