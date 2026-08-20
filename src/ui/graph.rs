@@ -43,10 +43,21 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
 
     // Reserve space for peer list + legend at the bottom.
     let legend_height = 1 + n as u16;
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(3), Constraint::Length(legend_height)])
-        .split(inner);
+
+    // If the panel is too small for a canvas, skip it and show only the list.
+    let show_canvas = inner.height >= legend_height + 3;
+
+    let chunks = if show_canvas {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(3), Constraint::Length(legend_height)])
+            .split(inner)
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(inner.height)])
+            .split(inner)
+    };
 
     // Centre the local node; place peers on a circle.
     let cx = 50.0f64;
@@ -169,7 +180,9 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             });
         });
 
-    f.render_widget(canvas, chunks[0]);
+    if show_canvas {
+        f.render_widget(canvas, chunks[0]);
+    }
 
     // Peer list + legend.
     let mut lines: Vec<ratatui::text::Line> = Vec::new();

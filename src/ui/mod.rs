@@ -29,7 +29,17 @@ use theme as t;
 /// Top-level draw entrypoint called every frame.
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.size();
-    let compact = area.height < 30;
+
+    // Compute layout dynamically based on available height.
+    // Priority: give the middle panel (graph + tunnels) as much space as possible.
+    // compact = no ASCII banner; ultra = minimal header + bottom.
+    let (header_h, bottom_h, compact) = if area.height >= 40 {
+        (10, 10, false) // full mode: ASCII banner + sparklines
+    } else if area.height >= 24 {
+        (5, 7, true) // compact: stats only, log only
+    } else {
+        (4, 4, true) // ultra compact: 2-line header, 2-line log
+    };
 
     // Background fill so the palette reads consistently.
     f.render_widget(
@@ -37,27 +47,14 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         area,
     );
 
-    // Responsive layout: compact mode for small terminals (< 30 rows),
-    // full mode with ASCII banner for larger ones.
-    let chunks = if compact {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(5), // compact header (2-line stats + borders)
-                Constraint::Min(8),    // middle (graph + tunnels)
-                Constraint::Length(7), // compact bottom (sparklines + log)
-            ])
-            .split(area)
-    } else {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(10), // header (7-line ASCII + borders + padding)
-                Constraint::Min(12),    // middle (graph + tunnels)
-                Constraint::Length(10), // bottom (sparklines + log)
-            ])
-            .split(area)
-    };
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(header_h),
+            Constraint::Min(8), // middle always gets at least 8 rows
+            Constraint::Length(bottom_h),
+        ])
+        .split(area);
 
     header::draw(f, app, chunks[0], compact);
 

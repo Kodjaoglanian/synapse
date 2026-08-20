@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.2.2] - 2025-01-20
+
+### Fixed
+
+- **Graph and peer list still invisible on medium terminals**: the compact
+  mode threshold was < 30 rows, but terminals with 30-39 rows used full mode
+  (header 10 + bottom 10 = 20), leaving only 10-19 rows for the graph panel.
+  Now the layout is computed dynamically:
+  - >= 40 rows: full mode (ASCII banner + sparklines)
+  - 24-39 rows: compact mode (stats only, log only)
+  - < 24 rows: ultra compact (minimal header + log)
+- **Graph panel skips canvas when too small**: if the panel has fewer rows
+  than needed for canvas + peer list, the canvas is skipped and only the
+  peer list is shown, so peers are always visible.
+
 ## [0.2.1] - 2025-01-20
 
 ### Fixed
