@@ -56,6 +56,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     sparklines::draw(f, app, chunks[2]);
 
+    // Debug overlay (top-right corner).
+    draw_debug_overlay(f, app);
+
     // Modal overlay.
     draw_modal(f, app);
 }
@@ -500,4 +503,36 @@ pub fn link_style(l: crate::network::LinkKind) -> ratatui::style::Style {
         LinkKind::DirectSlow => t::status_warn_style(),
         LinkKind::Relay => t::status_relay_style(),
     }
+}
+
+/// Debug overlay showing snapshot peer count and status.
+fn draw_debug_overlay(f: &mut Frame, app: &App) {
+    let area = f.size();
+    let overlay = Rect {
+        x: area.width.saturating_sub(40),
+        y: 1,
+        width: 38,
+        height: 4 + app.snapshot.peers.len() as u16,
+    };
+    let peers: Vec<String> = app
+        .snapshot
+        .peers
+        .values()
+        .map(|p| format!("  {} {:?}", p.label, p.status))
+        .collect();
+    let mut lines = vec![
+        ratatui::text::Line::styled(
+            format!("[DBG] peers: {}", app.snapshot.peers.len()),
+            t::status_warn_style(),
+        ),
+        ratatui::text::Line::styled(format!("      tick: {}", app.tick), t::dim_style()),
+    ];
+    for p in peers {
+        lines.push(ratatui::text::Line::styled(p, t::status_ok_style()));
+    }
+    f.render_widget(
+        ratatui::widgets::Paragraph::new(lines)
+            .style(ratatui::style::Style::default().bg(t::palette::BG)),
+        overlay,
+    );
 }

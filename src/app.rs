@@ -243,17 +243,9 @@ impl App {
 
     /// Refresh the metrics snapshot from the watch channel (non-blocking).
     pub fn refresh_snapshot(&mut self) {
-        // watch::Receiver exposes the latest value via borrow; mark seen so
-        // has_changed() stays accurate. We just take the latest snapshot.
-        if self
-            .network
-            .metrics
-            .snapshot_rx
-            .has_changed()
-            .unwrap_or(false)
-        {
-            self.snapshot = self.network.metrics.snapshot_rx.borrow_and_update().clone();
-        }
+        // Always take the latest snapshot from the watch channel.
+        // borrow_and_update() marks the current value as seen and returns it.
+        self.snapshot = self.network.metrics.snapshot_rx.borrow_and_update().clone();
     }
 
     /// Advance the animation tick.

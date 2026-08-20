@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.1.6] - 2025-01-20
+
+### Fixed
+
+- **Snapshot not refreshing in TUI**: `refresh_snapshot` was using
+  `has_changed()` which could miss the first snapshot. Now always takes the
+  latest via `borrow_and_update()`.
+
+### Added
+
+- **Debug overlay** in the TUI (top-right corner) showing peer count, tick
+  counter, and per-peer status — helps diagnose connection issues visually.
+
 ## [0.1.5] - 2025-01-20
 
 ### Fixed
