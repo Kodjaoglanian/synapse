@@ -39,7 +39,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(8),  // header
+            Constraint::Length(10), // header (7-line ASCII + borders + padding)
             Constraint::Min(12),    // middle (graph + tunnels)
             Constraint::Length(10), // bottom (sparklines + log)
         ])
