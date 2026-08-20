@@ -157,6 +157,15 @@ synapse --headless --signaling http://server:8080 --dial-room alice:room1
 | `--headless` | Run without TUI, log to stdout | |
 | `--lang <en\|pt>` | UI language: English or Português | `en` (env `SYNAPSE_LANG`) |
 
+### Self-update
+
+```bash
+synapse update
+```
+
+Checks GitHub for a newer release, downloads the matching binary for your
+platform, and replaces the running executable in place.
+
 ## TUI keybindings
 
 | Key | Action |

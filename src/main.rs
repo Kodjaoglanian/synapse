@@ -14,6 +14,7 @@ mod events;
 mod i18n;
 mod network;
 mod ui;
+mod update;
 
 use std::io::{stdout, IsTerminal};
 use std::process;
@@ -33,6 +34,9 @@ use network::{NetworkConfig, SeedPeer, TunnelSeed};
 #[derive(Parser, Debug)]
 #[command(name = "synapse", version, about, long_about = None)]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// Comma-separated list of STUN server URLs (e.g. stun:stun.l.google.com:19302).
     #[arg(long, value_delimiter = ',', value_hint = ValueHint::Url, env = "SYNAPSE_STUN")]
     stun: Vec<String>,
@@ -74,11 +78,22 @@ struct Cli {
     lang: i18n::Lang,
 }
 
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    /// Download and install the latest release from GitHub.
+    Update,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Initialize i18n with the selected language.
     i18n::init(cli.lang);
+
+    // Handle subcommands (e.g. `synapse update`).
+    if let Some(Command::Update) = cli.command {
+        return update::run();
+    }
 
     let stun = if cli.stun.is_empty() {
         default_stun_servers()

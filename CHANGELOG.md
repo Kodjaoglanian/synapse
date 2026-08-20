@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.1.3] - 2025-01-20
+
+### Added
+
+- **Self-update**: `synapse update` subcommand — checks GitHub for the latest
+  release, downloads the matching binary for your platform, and replaces the
+  running executable in place.
+
+### Fixed
+
+- **Header height**: increased from 8 to 10 rows so the full ASCII banner is
+  no longer clipped at the bottom.
+
 ## [0.1.2] - 2025-01-20
 
 ### Added
