@@ -458,7 +458,7 @@ fn render_text_field(text: &str, cursor: usize, active: bool) -> ratatui::text::
     } else {
         " ".to_string()
     };
-    let after = if cursor + 1 <= text.len() {
+    let after = if cursor < text.len() {
         text[cursor + 1..].to_string()
     } else {
         String::new()

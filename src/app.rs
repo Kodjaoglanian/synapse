@@ -269,11 +269,9 @@ impl App {
         }
 
         // Global keys.
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            if key.code == KeyCode::Char('c') {
-                self.quit = true;
-                return AppAction::Quit;
-            }
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+            self.quit = true;
+            return AppAction::Quit;
         }
         match key.code {
             KeyCode::Char('q') => {
@@ -366,7 +364,7 @@ impl App {
                     let n = self.log.len();
                     if n > 0 {
                         let cur = self.selected_log.unwrap_or(0);
-                        self.selected_log = Some(cur.checked_sub(1).unwrap_or(0));
+                        self.selected_log = Some(cur.saturating_sub(1));
                     }
                 }
                 KeyCode::Char('G') => {
@@ -403,7 +401,7 @@ impl App {
                 // `self.modal` ends, so we never borrow `self` twice.
                 enum Pending {
                     None,
-                    Submit { cmd: EngineCmd, msg: String },
+                    Submit { cmd: Box<EngineCmd>, msg: String },
                     Close,
                 }
                 let mut pending = Pending::None;
@@ -432,7 +430,7 @@ impl App {
                                 ),
                             };
                             pending = Pending::Submit {
-                                cmd,
+                                cmd: Box::new(cmd),
                                 msg: format!("signaling {verb} submitted for room '{room}'"),
                             };
                         }
@@ -440,12 +438,12 @@ impl App {
                         _ => form.field = next_signaling_field(form.field),
                     },
                     KeyCode::Backspace => {
-                        if matches!(form.field, SignalingField::Label | SignalingField::Room) {
-                            if form.cursor > 0 {
-                                form.cursor -= 1;
-                                let pos = form.cursor;
-                                signaling_text_mut(form).remove(pos);
-                            }
+                        if matches!(form.field, SignalingField::Label | SignalingField::Room)
+                            && form.cursor > 0
+                        {
+                            form.cursor -= 1;
+                            let pos = form.cursor;
+                            signaling_text_mut(form).remove(pos);
                         }
                     }
                     KeyCode::Left => {
@@ -483,7 +481,7 @@ impl App {
                 match pending {
                     Pending::None => {}
                     Pending::Submit { cmd, msg } => {
-                        let _ = self.network.engine.cmd_tx.send(cmd);
+                        let _ = self.network.engine.cmd_tx.send(*cmd);
                         self.push_log(LogLevel::Info, msg);
                         self.modal = Modal::None;
                     }
@@ -516,12 +514,12 @@ impl App {
                         _ => form.field = next_field(form.field),
                     },
                     KeyCode::Backspace => {
-                        if matches!(form.field, FormField::Label | FormField::Sdp) {
-                            if form.cursor > 0 {
-                                form.cursor -= 1;
-                                let pos = form.cursor;
-                                active_text_mut(form).remove(pos);
-                            }
+                        if matches!(form.field, FormField::Label | FormField::Sdp)
+                            && form.cursor > 0
+                        {
+                            form.cursor -= 1;
+                            let pos = form.cursor;
+                            active_text_mut(form).remove(pos);
                         }
                     }
                     KeyCode::Left => {

@@ -53,7 +53,7 @@ pub enum EngineCmd {
     /// Feed a remote SDP answer/offer for a known peer.
     RemoteSdp {
         peer: PeerId,
-        sdp: RTCSessionDescription,
+        sdp: Box<RTCSessionDescription>,
     },
     /// Feed a remote ICE candidate (trickle ICE).
     RemoteIce {
@@ -539,8 +539,6 @@ async fn wire_data_channel(
                     let _ = dc_ping.send(&Bytes::from(format!("pong:{rest}"))).await;
                 } else if let Some(rest) = data.strip_prefix("pong:") {
                     if let Ok(ts) = rest.parse::<u128>() {
-                        let rtt = (Instant::now().duration_since(Instant::now()).as_millis() as i64
-                            + 0) as i64;
                         // Compute RTT against the original send time encoded in ts.
                         let now_ns = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
@@ -548,7 +546,6 @@ async fn wire_data_channel(
                             .as_nanos();
                         let rtt_ms = now_ns.saturating_sub(ts) / 1_000_000;
                         let rtt_ms = rtt_ms.min(u32::MAX as u128) as u32;
-                        let _ = rtt; // unused fallback
                         update_peer_state(&mesh_ping, peer_id, |p| {
                             p.rtt_ms = rtt_ms;
                             p.link = LinkKind::classify(rtt_ms, p.relayed);
@@ -737,7 +734,7 @@ async fn handle_remote_sdp(
     peers: &Arc<Mutex<HashMap<PeerId, PeerCtx>>>,
     events: &broadcast::Sender<NetEvent>,
     peer_id: PeerId,
-    sdp: RTCSessionDescription,
+    sdp: Box<RTCSessionDescription>,
 ) -> Result<()> {
     let pc = {
         let g = peers.lock().await;
@@ -745,7 +742,7 @@ async fn handle_remote_sdp(
             .map(|c| Arc::clone(&c.pc))
             .ok_or_else(|| anyhow!("unknown peer {peer_id}"))?
     };
-    pc.set_remote_description(sdp).await?;
+    pc.set_remote_description(*sdp).await?;
     emit_log(
         events,
         LogLevel::Handshake,
@@ -859,7 +856,7 @@ async fn handle_close_tunnel(
     let mut to_close = Vec::new();
     {
         let mut g = peers.lock().await;
-        for (_, ctx) in g.iter_mut() {
+        for ctx in g.values_mut() {
             if let Some(dc) = ctx.tunnels.remove(&tunnel_id) {
                 to_close.push(dc);
             }
