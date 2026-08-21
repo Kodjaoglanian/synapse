@@ -20,6 +20,13 @@ Decentralized P2P tunneling platform with a high-end terminal UI (Rust + Tokio +
 - `--dial-room LOCAL_NAME:ROOM` — dial via signaling with this local identity (repeatable; needs `--signaling`)
 - `--answer-room LOCAL_NAME:ROOM` — answer via signaling with this local identity (repeatable; needs `--signaling`)
 - `--headless` — no TUI, log to stdout
+- `--lang <en|pt>` — UI language (env `SYNAPSE_LANG`; default `en`)
+
+## Subcommands
+
+- `synapse update` — self-update: checks GitHub for a newer release, downloads
+  the matching binary for the platform, verifies the SHA-256 checksum, and
+  replaces the running executable in place.
 
 ## Keybindings (TUI)
 
@@ -78,10 +85,38 @@ server that appends, or run synapse with `--peer`/`n` for manual SDP exchange.
 - `src/main.rs` — CLI (clap), terminal setup, panic hook, clean shutdown
 - `src/app.rs` — global state, focus, modal forms, input → actions
 - `src/events.rs` — unified event loop (crossterm keys + tick + network wakeup)
-- `src/network/` — `engine.rs` (WebRTC ICE/DataChannel), `proxy.rs` (TCP bidirectional), `metrics.rs` (telemetry snapshots via `watch` every 100ms)
+- `src/network/` — `engine.rs` (WebRTC ICE/DataChannel), `proxy.rs` (TCP bidirectional), `metrics.rs` (telemetry snapshots via `watch` every 100ms), `signaling.rs` (HTTP signaling client)
 - `src/ui/` — `mod.rs` (layout + modals), `header.rs`, `graph.rs` (Canvas mesh), `tunnels.rs`, `sparklines.rs`, `theme.rs` (Tokyo Night palette)
+- `src/i18n.rs` — English/Português strings
+- `src/update.rs` — self-update logic (GitHub Releases, SHA-256 verify, in-place replace)
 
 Network and UI are decoupled via `tokio::sync::mpsc`/`watch`/`broadcast`. No `unwrap()` in critical paths; terminal is always restored via a panic hook.
+
+## Tunnel data flow (v0.2.6+)
+
+1. `--tunnel PORT:PEER:HOST:PORT:LABEL` registers a listener spec keyed by
+   `PEER` (label). The listener is created immediately; the peer is resolved
+   by label when the signaling `hello` arrives.
+2. Each accepted local TCP connection opens a **new** data channel carrying
+   its destination metadata (`tunnel:<label>:<host>:<port>`), instead of
+   reusing a stale per-tunnel channel.
+3. The remote side parses the metadata, dials `HOST:PORT`, and bridges bytes
+   bidirectionally (TcpStream ↔ RTCDataChannel).
+4. The local side waits for the data channel to open before pumping bytes,
+   and closes cleanly when the remote endpoint finishes.
+
+## Tests
+
+- `cargo test` — unit + regression tests (rendering, metrics, tunnel metadata)
+- Regression: 80x24 rendering shows `PEERS 2`, Alice local, Bob remote.
+- Regression: HTTP request Alice → tunnel → Bob → local server returns 200.
+
+## CI
+
+- `.github/workflows/ci.yml` — lint (fmt + clippy), smoke test, lockfile
+  validation via `cargo metadata --locked --no-deps --format-version 1`.
+- `.github/workflows/release.yml` — multi-target build on `v*` tags, uploads
+  binaries + checksums, runs post-release verification.
 
 ## Notes
 
@@ -89,3 +124,4 @@ Network and UI are decoupled via `tokio::sync::mpsc`/`watch`/`broadcast`. No `un
 - `webrtc 0.11`'s `RTCDataChannel::send` takes `&bytes::Bytes`; `RTCDataChannelState` is private (compared via Debug string in `engine::is_dc_open`).
 - `ratatui 0.26`: `Frame::size()` (not `area()`), `Rect::inner(&Margin)`, `Table::highlight_style` (not `row_highlight_style`).
 - Remaining warnings are dead-code (reserved helpers/fields) — harmless.
+- Full technical docs: https://github.com/Kodjaoglanian/synapse/wiki

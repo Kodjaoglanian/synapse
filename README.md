@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.
 Or pin a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.sh | sh -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.sh | sh -s -- --version v0.2.6
 ```
 
 ### One-line install (Windows — PowerShell)
@@ -56,7 +56,7 @@ irm https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.ps1 | i
 Or pin a specific version:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.ps1))) -Version "v0.1.0"
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Kodjaoglanian/synapse/main/install.ps1))) -Version "v0.2.6"
 ```
 
 The script downloads the correct binary, installs it to `%LOCALAPPDATA%\Programs\synapse`,
@@ -69,11 +69,11 @@ Prebuilt binaries for all platforms are available on the
 
 | Platform | Asset |
 |----------|-------|
-| Linux x86_64 | `synapse-v0.1.0-x86_64-unknown-linux-gnu.tar.gz` |
-| Linux ARM64 | `synapse-v0.1.0-aarch64-unknown-linux-gnu.tar.gz` |
-| macOS x86_64 (Intel) | `synapse-v0.1.0-x86_64-apple-darwin.tar.gz` |
-| macOS ARM64 (Apple Silicon) | `synapse-v0.1.0-aarch64-apple-darwin.tar.gz` |
-| Windows x86_64 | `synapse-v0.1.0-x86_64-pc-windows-msvc.zip` |
+| Linux x86_64 | `synapse-v0.2.6-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux ARM64 | `synapse-v0.2.6-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS x86_64 (Intel) | `synapse-v0.2.6-x86_64-apple-darwin.tar.gz` |
+| macOS ARM64 (Apple Silicon) | `synapse-v0.2.6-aarch64-apple-darwin.tar.gz` |
+| Windows x86_64 | `synapse-v0.2.6-x86_64-pc-windows-msvc.zip` |
 
 Extract the archive and add the `synapse` (or `synapse.exe`) binary to your PATH.
 
@@ -273,3 +273,10 @@ cargo build --release --target aarch64-unknown-linux-gnu
 ## License
 
 [MIT](LICENSE)
+
+## Documentation
+
+Full technical documentation — architecture deep-dive, signaling protocol,
+WebRTC engine internals, tunnel data flow, TUI layout, build/release pipeline,
+and troubleshooting — lives in the
+[GitHub Wiki](https://github.com/Kodjaoglanian/synapse/wiki).
