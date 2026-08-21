@@ -383,7 +383,7 @@ fn draw_signaling_room(f: &mut Frame, _app: &App, form: &crate::app::SignalingRo
     let label_block = Block::default()
         .borders(Borders::ALL)
         .border_style(field_style(matches!(form.field, SignalingField::Label)))
-        .title("Peer label");
+        .title("Local name");
     let label_text = render_text_field(
         &form.label,
         form.cursor,
@@ -548,6 +548,7 @@ mod tests {
             engine: EngineHandle { cmd_tx },
         };
         let mut app = App::new(network);
+        app.local_label = "alice".to_string();
         app.snapshot.peers.insert(
             1,
             PeerState {
@@ -571,7 +572,9 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n");
+        assert!(rendered.contains("synapse · local: alice"), "{rendered}");
         assert!(rendered.contains("● bob  direct"), "{rendered}");
+        assert!(!rendered.contains("● alice"), "{rendered}");
         assert!(rendered.contains("no active streams"), "{rendered}");
     }
 }

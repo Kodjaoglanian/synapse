@@ -142,6 +142,7 @@ pub struct App {
     pub public_ip: Option<String>,
     pub nat_type: String,
     pub mode: String,
+    pub local_label: String,
     pub selected_peer: Option<usize>,
     pub selected_tunnel: Option<usize>,
     pub selected_log: Option<usize>,
@@ -163,6 +164,7 @@ impl App {
             public_ip: None,
             nat_type: "unknown".into(),
             mode: "P2P".into(),
+            local_label: "local".into(),
             selected_peer: None,
             selected_tunnel: None,
             selected_log: None,
@@ -207,6 +209,7 @@ impl App {
     /// Apply a single network event to app state.
     fn apply_net_event(&mut self, ev: NetEvent) {
         match ev {
+            NetEvent::LocalIdentity(label) => self.local_label = label,
             NetEvent::Log(level, msg) => self.push_log(level, msg),
             NetEvent::PeerAdded(_) => self.push_log(LogLevel::Info, "peer added".into()),
             NetEvent::PeerUpdated(_) => {}
@@ -662,6 +665,9 @@ mod tests {
         let (cmd_tx, _cmd_rx) = mpsc::unbounded_channel();
 
         events_tx
+            .send(NetEvent::LocalIdentity("alice".to_string()))
+            .unwrap();
+        events_tx
             .send(NetEvent::Log(LogLevel::Info, "connected".to_string()))
             .unwrap();
 
@@ -677,6 +683,7 @@ mod tests {
         let mut app = App::new(network);
         app.drain_network_events();
 
+        assert_eq!(app.local_label, "alice");
         assert_eq!(app.log.len(), 1);
         assert_eq!(app.log.front().unwrap().msg, "connected");
     }

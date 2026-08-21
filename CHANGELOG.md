@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.2.4] - 2026-08-20
+
+### Fixed
+
+- Local and remote identities are now separate: the header keeps the local
+  name while the mesh list shows only the remote peer name.
+- Signaling peers use a neutral placeholder until the remote `hello` arrives,
+  preventing the local name from appearing to switch after connection.
+- CLI help, signaling modal, and connection documentation now identify the
+  first `LOCAL_NAME:ROOM` component as the local identity.
+
+### Tests
+
+- Added regression assertions that Alice remains local while Bob is rendered
+  as the connected remote peer.
+
 ## [0.2.3] - 2026-08-20
 
 ### Fixed

@@ -120,6 +120,7 @@ pub struct PeerState {
 /// Events emitted by the network layer for the UI / app to react to.
 #[derive(Debug, Clone)]
 pub enum NetEvent {
+    LocalIdentity(String),
     PeerAdded(PeerState),
     PeerUpdated(PeerState),
     PeerRemoved(PeerId),

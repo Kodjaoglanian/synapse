@@ -59,14 +59,14 @@ struct Cli {
     #[arg(long, value_hint = ValueHint::Url, env = "SYNAPSE_SIGNALING")]
     signaling: Option<String>,
 
-    /// On startup, dial a peer via the signaling server. Format: `label:room`.
+    /// On startup, dial via signaling as `local_name:room`.
     /// Requires --signaling. Repeatable.
-    #[arg(long = "dial-room", value_name = "LABEL:ROOM")]
+    #[arg(long = "dial-room", value_name = "LOCAL_NAME:ROOM")]
     dial_rooms: Vec<String>,
 
-    /// On startup, answer a peer via the signaling server. Format: `label:room`.
+    /// On startup, answer via signaling as `local_name:room`.
     /// Requires --signaling. Repeatable.
-    #[arg(long = "answer-room", value_name = "LABEL:ROOM")]
+    #[arg(long = "answer-room", value_name = "LOCAL_NAME:ROOM")]
     answer_rooms: Vec<String>,
 
     /// Run without a TTY (headless): just start the network stack and log to stdout.
@@ -216,6 +216,7 @@ async fn run_headless(mut net: network::Network) -> Result<()> {
 fn print_event(ev: &network::NetEvent) {
     use network::{LogLevel, NetEvent};
     match ev {
+        NetEvent::LocalIdentity(label) => println!("[LOCAL] {label}"),
         NetEvent::Log(LogLevel::Info, m) => println!("[INFO ] {m}"),
         NetEvent::Log(LogLevel::Warn, m) => println!("[WARN ] {m}"),
         NetEvent::Log(LogLevel::Error, m) => println!("[ERR  ] {m}"),

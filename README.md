@@ -114,9 +114,10 @@ synapse
    synapse --signaling http://your-server:8080 --answer-room bob:room1
    ```
 
-4. ICE connects — the peer appears in the mesh graph with a colored edge
-   indicating link quality (green = fast direct, yellow = moderate, purple =
-   relay).
+4. ICE connects — Alice remains the local identity on machine A and sees Bob
+   as the remote peer; Bob remains local on machine B and sees Alice remotely.
+   The graph edge indicates link quality (green = fast direct, yellow =
+   moderate, purple = relay).
 
 ### Open a tunnel
 
@@ -124,8 +125,8 @@ Once two peers are connected, expose a local port that tunnels to the remote
 peer's endpoint:
 
 ```bash
-# Forward local port 3000 to alice's 127.0.0.1:8080
-synapse --tunnel 3000:alice:127.0.0.1:8080:web
+# On Alice, forward local port 3000 to Bob's 127.0.0.1:8080
+synapse --tunnel 3000:bob:127.0.0.1:8080:web
 ```
 
 Or open tunnels at startup alongside a dial:
@@ -133,8 +134,8 @@ Or open tunnels at startup alongside a dial:
 ```bash
 synapse --signaling http://server:8080 \
   --dial-room alice:room1 \
-  --tunnel 3000:alice:127.0.0.1:8080:web \
-  --tunnel 2222:alice:127.0.0.1:22:ssh
+  --tunnel 3000:bob:127.0.0.1:8080:web \
+  --tunnel 2222:bob:127.0.0.1:22:ssh
 ```
 
 ### Headless mode (no TUI)
@@ -152,8 +153,8 @@ synapse --headless --signaling http://server:8080 --dial-room alice:room1
 | `--peer LABEL:TOKEN` | Seed peer to dial on startup (repeatable) | |
 | `--tunnel PORT:PEER:HOST:PORT:LABEL` | Local tunnel to open (repeatable) | |
 | `--signaling <URL>` | HTTP signaling server URL | (env `SYNAPSE_SIGNALING`) |
-| `--dial-room LABEL:ROOM` | Dial a peer via signaling (repeatable) | |
-| `--answer-room LABEL:ROOM` | Answer a peer via signaling (repeatable) | |
+| `--dial-room LOCAL_NAME:ROOM` | Dial via signaling with this local identity (repeatable) | |
+| `--answer-room LOCAL_NAME:ROOM` | Answer via signaling with this local identity (repeatable) | |
 | `--headless` | Run without TUI, log to stdout | |
 | `--lang <en\|pt>` | UI language: English or Português | `en` (env `SYNAPSE_LANG`) |
 

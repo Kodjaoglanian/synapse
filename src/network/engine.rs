@@ -238,6 +238,7 @@ pub async fn spawn(
                 }
                 EngineCmd::DialSignaling { label, room } => {
                     if let Some(sig) = signaling.as_ref() {
+                        let _ = events.send(NetEvent::LocalIdentity(label.clone()));
                         let sig = sig.clone();
                         let api = Arc::clone(&api);
                         let mesh = mesh.clone();
@@ -278,6 +279,7 @@ pub async fn spawn(
                 }
                 EngineCmd::AnswerSignaling { label, room } => {
                     if let Some(sig) = signaling.as_ref() {
+                        let _ = events.send(NetEvent::LocalIdentity(label.clone()));
                         let sig = sig.clone();
                         let api = Arc::clone(&api);
                         let mesh = mesh.clone();
@@ -1102,7 +1104,7 @@ async fn signaling_dial(
     emit_log(
         events,
         LogLevel::Info,
-        format!("signaling dial '{label}' room '{room}' (id={peer_id})"),
+        format!("signaling dial as '{label}' room '{room}' (id={peer_id})"),
     );
 
     // ICE hook: post every local candidate to /ice/{room}/a.
@@ -1155,7 +1157,7 @@ async fn signaling_dial(
 
     let state = PeerState {
         id: peer_id,
-        label: label.clone(),
+        label: format!("peer {peer_id}"),
         status: PeerStatus::Gathering,
         connected_at: Some(Instant::now()),
         ..Default::default()
@@ -1262,7 +1264,7 @@ async fn signaling_answer(
     emit_log(
         events,
         LogLevel::Info,
-        format!("signaling answer '{label}' room '{room}' (id={peer_id})"),
+        format!("signaling answer as '{label}' room '{room}' (id={peer_id})"),
     );
 
     // ICE hook: post every local candidate to /ice/{room}/b.
@@ -1303,7 +1305,7 @@ async fn signaling_answer(
 
     let state = PeerState {
         id: peer_id,
-        label: label.clone(),
+        label: format!("peer {peer_id}"),
         status: PeerStatus::Gathering,
         connected_at: Some(Instant::now()),
         ..Default::default()

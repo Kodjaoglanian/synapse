@@ -12,11 +12,12 @@ use crate::i18n;
 use crate::network::{fmt_bytes, fmt_rate};
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect, compact: bool) {
+    let title = format!("synapse · local: {}", app.local_label);
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded)
         .border_style(t::panel_border_style())
-        .title(t::panel_title("◆", "synapse"));
+        .title(t::panel_title("◆", &title));
     f.render_widget(block, area);
 
     let inner = area.inner(&ratatui::layout::Margin {

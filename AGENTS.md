@@ -17,8 +17,8 @@ Decentralized P2P tunneling platform with a high-end terminal UI (Rust + Tokio +
 - `--peer LABEL:TOKEN` — seed peer to dial on startup (repeatable)
 - `--tunnel PORT:PEER:HOST:PORT:LABEL` — local tunnel to open on startup (repeatable)
 - `--signaling <URL>` — HTTP signaling server base URL (env `SYNAPSE_SIGNALING`)
-- `--dial-room LABEL:ROOM` — dial a peer via signaling on startup (repeatable; needs `--signaling`)
-- `--answer-room LABEL:ROOM` — answer a peer via signaling on startup (repeatable; needs `--signaling`)
+- `--dial-room LOCAL_NAME:ROOM` — dial via signaling with this local identity (repeatable; needs `--signaling`)
+- `--answer-room LOCAL_NAME:ROOM` — answer via signaling with this local identity (repeatable; needs `--signaling`)
 - `--headless` — no TUI, log to stdout
 
 ## Keybindings (TUI)
@@ -42,7 +42,7 @@ Decentralized P2P tunneling platform with a high-end terminal UI (Rust + Tokio +
 3. On machine B (answerer):
    `synapse --signaling http://server:8080 --answer-room bob:room1`
    or press `s`, enter label `bob`, room `room1`, mode `answer`.
-4. ICE connects → the peer appears in the mesh graph with the right edge color.
+4. ICE connects → each header keeps its local identity while the graph lists the remote identity with the right edge color.
 
 ### Reference signaling server (Python, ~30 lines)
 
