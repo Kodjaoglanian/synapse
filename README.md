@@ -116,7 +116,8 @@ synapse
 
 4. ICE connects — Alice remains the local identity on machine A and sees Bob
    as the remote peer; Bob remains local on machine B and sees Alice remotely.
-   The graph edge indicates link quality (green = fast direct, yellow =
+   Each graph and participant list shows both the named local node and all
+   remote nodes. The edge indicates link quality (green = fast direct, yellow =
    moderate, purple = relay).
 
 ### Open a tunnel

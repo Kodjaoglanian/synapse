@@ -41,7 +41,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect, compact: bool) {
         .unwrap_or_else(|| i18n::t().discovering_ip.into());
     let nat = app.nat_type.clone();
     let mode = app.mode.clone();
-    let peers = snap.peers.len();
+    let peers = snap.peers.len() + 1;
     let tx = i18n::t();
 
     if compact {

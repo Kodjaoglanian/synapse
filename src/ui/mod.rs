@@ -573,6 +573,8 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(rendered.contains("synapse · local: alice"), "{rendered}");
+        assert!(rendered.contains("PEERS 2"), "{rendered}");
+        assert!(rendered.contains("◉ alice  local"), "{rendered}");
         assert!(rendered.contains("● bob  direct"), "{rendered}");
         assert!(!rendered.contains("● alice"), "{rendered}");
         assert!(rendered.contains("no active streams"), "{rendered}");

@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::symbols::Marker;
+use ratatui::text::Span;
 use ratatui::widgets::{
     canvas::{Canvas, Line as CanvasLine, Points},
     Block, Borders, Paragraph,
@@ -42,7 +43,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let n = peer_ids.len();
 
     // Reserve space for peer list + legend at the bottom.
-    let legend_height = 1 + n as u16;
+    let legend_height = 2 + n as u16;
 
     // If the panel is too small for a canvas, skip it and show only the list.
     let show_canvas = inner.height >= legend_height + 3;
@@ -72,6 +73,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     }
 
     let tick = app.tick as f64;
+    let local_label = app.local_label.clone();
 
     let canvas = Canvas::default()
         .background_color(t::palette::BG)
@@ -140,6 +142,11 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
                 });
                 // Animated halo for connected peers.
                 if let Some(p) = peer {
+                    ctx.print(
+                        *px + 4.0,
+                        *py,
+                        Span::styled(p.label.clone(), Style::default().fg(t::palette::FG)),
+                    );
                     if p.status == PeerStatus::Connected {
                         let r = 3.0 + (tick * 0.08).sin().abs() * 2.0;
                         ctx.draw(&Points {
@@ -178,6 +185,11 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
                 ],
                 color: t::palette::CYAN,
             });
+            ctx.print(
+                cx + 4.0,
+                cy,
+                Span::styled(local_label.clone(), Style::default().fg(t::palette::BLUE)),
+            );
         });
 
     if show_canvas {
@@ -186,6 +198,11 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
 
     // Peer list + legend.
     let mut lines: Vec<ratatui::text::Line> = Vec::new();
+    lines.push(ratatui::text::Line::from(vec![
+        ratatui::text::Span::styled("◉ ", Style::default().fg(t::palette::BLUE)),
+        ratatui::text::Span::styled(app.local_label.clone(), Style::default().fg(t::palette::FG)),
+        ratatui::text::Span::styled("  local", t::dim_style()),
+    ]));
 
     // Show each peer with status indicator and label.
     for pid in &peer_ids {

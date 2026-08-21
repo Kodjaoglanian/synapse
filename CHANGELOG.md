@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.2.5] - 2026-08-21
+
+### Fixed
+
+- The participant count now includes the local node as well as remote peers.
+- The mesh canvas labels both local and remote nodes by name.
+- The participant list now always includes an explicit local row followed by
+  every connected remote peer, so a two-person room visibly shows both names.
+
+### Tests
+
+- Extended the 80x24 rendering regression to require `PEERS 2`, Alice as local,
+  and Bob as the connected remote participant.
+
 ## [0.2.4] - 2026-08-20
 
 ### Fixed
