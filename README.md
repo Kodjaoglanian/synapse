@@ -139,6 +139,28 @@ synapse --signaling http://server:8080 \
   --tunnel 2222:bob:127.0.0.1:22:ssh
 ```
 
+### Test a tunnel locally
+
+Use five terminals on the same machine:
+
+```bash
+# 1. Signaling server
+python3 signaling_server.py 8083
+
+# 2. HTTP service that represents Bob's remote endpoint
+python3 -m http.server 9090 --bind 127.0.0.1
+
+# 3. Bob
+synapse --signaling http://127.0.0.1:8083 --answer-room bob:tunnel-test
+
+# 4. Alice: localhost:3000 -> Bob's localhost:9090
+synapse --signaling http://127.0.0.1:8083 --dial-room alice:tunnel-test \
+  --tunnel 3000:bob:127.0.0.1:9090:web
+
+# 5. Send traffic through the tunnel
+curl http://127.0.0.1:3000/
+```
+
 ### Headless mode (no TUI)
 
 ```bash

@@ -75,6 +75,7 @@ pub struct Tunnel {
     pub id: u32,
     pub local_addr: SocketAddr,
     pub peer: PeerId,
+    pub peer_label: String,
     pub remote_host: String,
     pub remote_port: u16,
     pub label: String,

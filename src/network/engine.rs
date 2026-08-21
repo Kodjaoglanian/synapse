@@ -34,7 +34,7 @@ use webrtc::peer_connection::RTCPeerConnection;
 
 use super::{
     emit_log, IceCandidate, LinkKind, LogLevel, NetEvent, NetworkConfig, PeerId, PeerState,
-    PeerStatus, SharedMesh, Signaling, StreamInfo, StreamStatus, Tunnel,
+    PeerStatus, SharedMesh, Signaling, Tunnel,
 };
 use crate::network::metrics::MetricsHandle;
 
@@ -159,6 +159,7 @@ pub async fn spawn(
                     .parse()
                     .unwrap_or_else(|_| "127.0.0.1:0".parse().unwrap()),
                 peer: 0, // resolved by label later
+                peer_label: t.peer_label,
                 remote_host: t.remote_host,
                 remote_port: t.remote_port,
                 label: t.label,
@@ -647,82 +648,25 @@ async fn wire_data_channel(
     // Tunnel channel: label is "synapse-tun-<id>".
     if let Some(id_str) = label_owned.strip_prefix("synapse-tun-") {
         if let Ok(tid) = id_str.parse::<u32>() {
-            let dc_recv = Arc::clone(dc);
-            let metrics_t = metrics.clone();
-            let events_t = events.clone();
-            // Track a new stream.
-            let sid = rand_u64();
-            let info = StreamInfo {
-                id: sid,
-                tunnel_id: tid,
-                peer: peer_id,
-                status: StreamStatus::Established,
-                opened_at: Instant::now(),
-                bytes_sent: 0,
-                bytes_recv: 0,
-            };
-            {
-                let mut g = mesh.lock().await;
-                g.streams.insert(sid, info.clone());
+            match crate::network::proxy::decode_tunnel_endpoint(dc.protocol()) {
+                Ok((remote_host, remote_port)) => {
+                    crate::network::proxy::spawn_remote_endpoint(
+                        Arc::clone(dc),
+                        tid,
+                        peer_id,
+                        remote_host,
+                        remote_port,
+                        mesh,
+                        events,
+                        metrics,
+                    );
+                }
+                Err(e) => emit_log(
+                    &events,
+                    LogLevel::Error,
+                    format!("tunnel {tid}: invalid endpoint metadata: {e}"),
+                ),
             }
-            let _ = events_t.send(NetEvent::StreamOpened(info));
-
-            dc.on_open(Box::new({
-                let events_t = events_t.clone();
-                move || {
-                    let events_t = events_t.clone();
-                    Box::pin(async move {
-                        emit_log(
-                            &events_t,
-                            LogLevel::Handshake,
-                            format!("tunnel {tid} data channel open"),
-                        );
-                    })
-                }
-            }));
-
-            let events_msg = events_t.clone();
-            let metrics_msg = metrics_t.clone();
-            let mesh_msg = mesh.clone();
-            dc.on_message(Box::new(move |msg| {
-                let metrics_t = metrics_msg.clone();
-                let events_t = events_msg.clone();
-                let mesh_t = mesh_msg.clone();
-                let n = msg.data.len() as u64;
-                Box::pin(async move {
-                    {
-                        let mut g = mesh_t.lock().await;
-                        if let Some(stream) = g.streams.get_mut(&sid) {
-                            stream.status = StreamStatus::Transferring;
-                            stream.bytes_recv += n;
-                        }
-                    }
-                    record_traffic(&metrics_t, peer_id, 0, n);
-                    let _ = events_t.send(NetEvent::StreamUpdated(StreamInfo {
-                        id: sid,
-                        tunnel_id: tid,
-                        peer: peer_id,
-                        status: StreamStatus::Transferring,
-                        opened_at: Instant::now(),
-                        bytes_sent: 0,
-                        bytes_recv: n,
-                    }));
-                })
-            }));
-
-            dc.on_close(Box::new({
-                let events_t = events_t.clone();
-                let mesh_t = mesh.clone();
-                move || {
-                    let events_t = events_t.clone();
-                    let mesh_t = mesh_t.clone();
-                    Box::pin(async move {
-                        mesh_t.lock().await.streams.remove(&sid);
-                        let _ = events_t.send(NetEvent::StreamClosed(sid));
-                    })
-                }
-            }));
-            let _ = dc_recv;
         }
     }
 }
@@ -889,7 +833,7 @@ async fn handle_open_tunnel(
         let g = mesh.lock().await;
         g.peers
             .iter()
-            .find(|(_, p)| p.label == tunnel.peer_label())
+            .find(|(_, p)| p.label == tunnel.peer_label)
             .map(|(k, _)| *k)
     };
     if let Some(pid) = peer_id {
@@ -1809,20 +1753,6 @@ where
         // Broadcast is best-effort; receivers may be gone.
         // (Caller owns the events sender and emits higher-level events.)
         let _ = snap;
-    }
-}
-
-/// Tiny helper trait so `Tunnel` can be resolved by label.
-trait TunnelExt {
-    fn peer_label(&self) -> &str;
-}
-impl TunnelExt for Tunnel {
-    fn peer_label(&self) -> &str {
-        // The label encodes "peer_label" until peer id is resolved; we store the
-        // intended peer label in `remote_host`'s sibling field. For simplicity we
-        // keep a dedicated convention: when peer==0 we treat `label` as
-        // "<tunnel-label>@<peer-label>".
-        self.label.split('@').nth(1).unwrap_or("")
     }
 }
 

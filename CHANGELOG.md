@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandwidth throttling per tunnel
 - IPv6 support
 
+## [0.2.6] - 2026-08-21
+
+### Fixed
+
+- Tunnel configuration now preserves the target peer label, allowing listeners
+  created before signaling connects to resolve the remote peer correctly.
+- Each local TCP connection gets a data channel carrying its destination
+  metadata instead of reusing a stale per-tunnel channel.
+- Incoming tunnel channels now connect to the requested remote TCP endpoint and
+  bridge data bidirectionally.
+- Tunnel streams wait for the data channel to open and close cleanly when the
+  remote endpoint finishes.
+
+### Tests
+
+- Added endpoint metadata round-trip coverage and validated an HTTP request from
+  Alice through Bob to a local Python server.
+
 ## [0.2.5] - 2026-08-21
 
 ### Fixed

@@ -524,7 +524,9 @@ mod tests {
     use crate::app::App;
     use crate::network::engine::EngineHandle;
     use crate::network::metrics::{MetricsHandle, MetricsSnapshot};
-    use crate::network::{MeshState, Network, PeerState, PeerStatus};
+    use crate::network::{
+        MeshState, Network, PeerState, PeerStatus, StreamInfo, StreamStatus, Tunnel,
+    };
 
     #[test]
     fn renders_connected_peer_in_graph_and_list_at_80x24() {
@@ -558,6 +560,30 @@ mod tests {
                 ..Default::default()
             },
         );
+        app.snapshot.tunnels.insert(
+            1,
+            Tunnel {
+                id: 1,
+                local_addr: "127.0.0.1:3000".parse().unwrap(),
+                peer: 1,
+                peer_label: "bob".to_string(),
+                remote_host: "127.0.0.1".to_string(),
+                remote_port: 9090,
+                label: "web".to_string(),
+            },
+        );
+        app.snapshot.streams.insert(
+            2,
+            StreamInfo {
+                id: 2,
+                tunnel_id: 1,
+                peer: 1,
+                status: StreamStatus::Transferring,
+                opened_at: std::time::Instant::now(),
+                bytes_sent: 64,
+                bytes_recv: 128,
+            },
+        );
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
 
@@ -577,6 +603,7 @@ mod tests {
         assert!(rendered.contains("◉ alice  local"), "{rendered}");
         assert!(rendered.contains("● bob  direct"), "{rendered}");
         assert!(!rendered.contains("● alice"), "{rendered}");
-        assert!(rendered.contains("no active streams"), "{rendered}");
+        assert!(rendered.contains("web"), "{rendered}");
+        assert!(rendered.contains("STREAM"), "{rendered}");
     }
 }

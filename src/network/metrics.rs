@@ -321,6 +321,7 @@ mod tests {
                     id: 7,
                     local_addr: "127.0.0.1:9000".parse().unwrap(),
                     peer: 1,
+                    peer_label: "bob".to_string(),
                     remote_host: "127.0.0.1".to_string(),
                     remote_port: 80,
                     label: "web".to_string(),
